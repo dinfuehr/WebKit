@@ -1052,7 +1052,13 @@ macro prologue(codeBlockGetter, codeBlockSetter, osrSlowPath, traceSlowPath)
         unpoison(_g_CodeBlockPoison, PB, t3)
         move 0, PC
     else
-        loadp CodeBlock::m_instructions[t1], PC
+        if POISON
+            loadp _g_CodeBlockPoison, t2
+            xorp CodeBlock::m_instructions[t1], t2
+            move t2, PC
+        else
+            loadp CodeBlock::m_instructions[t1], PC
+        end
     end
 
     # Get new sp in t0 and check stack height.

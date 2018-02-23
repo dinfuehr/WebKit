@@ -216,9 +216,9 @@ MacroAssemblerCodeRef<JITStubRoutinePtrTag> virtualThunkFor(VM* vm, CallLinkInfo
     
     // Now we know that we have a CodeBlock, and we're committed to making a fast
     // call.
-#if USE(JSVALUE64)
-    jit.move(CCallHelpers::TrustedImm64(JITCodePoison::key()), GPRInfo::regT1);
-    jit.xor64(GPRInfo::regT1, GPRInfo::regT4);
+#if ENABLE(POISON)
+    jit.move(CCallHelpers::TrustedImmPtr(JITCodePoison::key()), GPRInfo::regT1);
+    jit.xorPtr(GPRInfo::regT1, GPRInfo::regT4);
 #endif
 
     // Make a tail call. This will return back to JIT code.
@@ -371,10 +371,17 @@ static MacroAssemblerCodeRef<JITThunkPtrTag> nativeForGenerator(VM* vm, ThunkFun
     jit.emitGetFromCallFrameHeaderPtr(CallFrameSlot::callee, JSInterfaceJIT::argumentGPR1);
     if (thunkFunctionType == ThunkFunctionType::JSFunction) {
         jit.loadPtr(JSInterfaceJIT::Address(JSInterfaceJIT::argumentGPR1, JSFunction::offsetOfExecutable()), JSInterfaceJIT::regT2);
+#if ENABLE(POISON)
         jit.xorPtr(JSInterfaceJIT::TrustedImmPtr(JSFunctionPoison::key()), JSInterfaceJIT::regT2);
-        jit.call(JSInterfaceJIT::Address(JSInterfaceJIT::regT2, executableOffsetToFunction), JSEntryPtrTag);
+#endif
+        jit.loadPtr(JSInterfaceJIT::Address(JSInterfaceJIT::regT2, executableOffsetToFunction), JSInterfaceJIT::regT2);
     } else
-        jit.call(JSInterfaceJIT::Address(JSInterfaceJIT::argumentGPR1, InternalFunction::offsetOfNativeFunctionFor(kind)), JSEntryPtrTag);
+        jit.loadPtr(JSInterfaceJIT::Address(JSInterfaceJIT::argumentGPR1, InternalFunction::offsetOfNativeFunctionFor(kind)), JSInterfaceJIT::regT2);
+#if ENABLE(POISON)
+    jit.move(JSInterfaceJIT::TrustedImmPtr(NativeCodePoison::key()), JSInterfaceJIT::regT1);
+    jit.xorPtr(JSInterfaceJIT::regT1, JSInterfaceJIT::regT2);
+#endif
+    jit.call(JSInterfaceJIT::regT2, JSEntryPtrTag);
 
 #if CPU(MIPS)
     // Restore stack space
@@ -1198,10 +1205,10 @@ MacroAssemblerCodeRef<JITThunkPtrTag> boundThisNoArgsFunctionCallGenerator(VM* v
             GPRInfo::regT0, ExecutableBase::offsetOfJITCodeWithArityCheckFor(CodeForCall)),
         GPRInfo::regT0);
     CCallHelpers::Jump noCode = jit.branchTestPtr(CCallHelpers::Zero, GPRInfo::regT0);
-    
-#if USE(JSVALUE64)
-    jit.move(CCallHelpers::TrustedImm64(JITCodePoison::key()), GPRInfo::regT1);
-    jit.xor64(GPRInfo::regT1, GPRInfo::regT0);
+
+#if ENABLE(POISON)
+    jit.move(CCallHelpers::TrustedImmPtr(JITCodePoison::key()), GPRInfo::regT1);
+    jit.xorPtr(GPRInfo::regT1, GPRInfo::regT0);
 #endif
     emitPointerValidation(jit, GPRInfo::regT0, JSEntryPtrTag);
     jit.call(GPRInfo::regT0, JSEntryPtrTag);

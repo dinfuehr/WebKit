@@ -34,6 +34,7 @@ uintptr_t makePoison()
 {
     uintptr_t poison = 0;
 #if ENABLE(POISON)
+#if USE(JSVALUE64)
     do {
         poison = cryptographicallyRandomNumber();
         poison = (poison << 16) ^ (static_cast<uintptr_t>(cryptographicallyRandomNumber()) << 3);
@@ -53,6 +54,21 @@ uintptr_t makePoison()
     // Note: a regular pointer has 3 alignment bits, but the poisoned bits need to use one
     // (see above). Hence, clients can only use 2 bits for flags.
     RELEASE_ASSERT(!(poison & 0x3));
+#else // USE(JSVALUE32_64)
+    poison = static_cast<uintptr_t>(cryptographicallyRandomNumber() << 2);
+
+    // Ensure that the poisoned bits (pointer ^ poison) cannot be 0. On 32-bit architectures
+    // we use bit 1 since this bit is 0 for all pointers. This allows to make null-checks
+    // against poisoned pointers, unpoisoning isn't necessary.
+    poison |= (1 << 1);
+
+    // Ensure that the bottom bit is 0, such that it can be used by clients to store flags.
+    // JSVALUE32_64 has only one bit for storing a flag as opposed to JSVALUE64 where 2 bits
+    // can be used by clients.
+    RELEASE_ASSERT(!(poison & 0x1));
+#endif
+
+
 #endif
     return poison;
 }

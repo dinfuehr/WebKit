@@ -78,6 +78,10 @@ class Node
         raise "Bogus register name #{doubleOperand}" unless doubleOperand =~ /^\$f/
         doubleOperand
     end
+
+    def mipsLoadOperand(dest)
+        mipsOperand
+    end
 end
 
 class SpecialRegister < NoChildren
@@ -187,6 +191,14 @@ end
 class AbsoluteAddress
     def mipsOperand
         raise "Unconverted absolute address at #{codeOriginString}"
+    end
+end
+
+class LabelReference
+    def mipsLoadOperand(dest)
+        $asm.puts "lw #{dest.mipsOperand}, \%got(#{asmLabel})($28)"
+
+        "#{offset}(#{dest.mipsOperand})"
     end
 end
 
@@ -741,6 +753,11 @@ def mipsFlippedOperands(operands)
     mipsOperands([operands[-1]] + operands[0..-2])
 end
 
+def mipsLoadOperands(operands)
+    raise unless operands.size == 2
+    [operands[1].mipsOperand, operands[0].mipsLoadOperand(operands[1])].join(", ")
+end
+
 def getMIPSOpcode(opcode, suffix)
 
 end
@@ -873,23 +890,23 @@ class Instruction
         when "noti"
             $asm.puts "nor #{operands[0].mipsOperand}, #{operands[0].mipsOperand}, $zero"
         when "loadi", "loadis", "loadp"
-            $asm.puts "lw #{mipsFlippedOperands(operands)}"
+            $asm.puts "lw #{mipsLoadOperands(operands)}"
         when "storei", "storep"
             $asm.puts "sw #{mipsOperands(operands)}"
         when "loadb"
-            $asm.puts "lbu #{mipsFlippedOperands(operands)}"
+            $asm.puts "lbu #{mipsLoadOperands(operands)}"
         when "loadbs"
-            $asm.puts "lb #{mipsFlippedOperands(operands)}"
+            $asm.puts "lb #{mipsLoadOperands(operands)}"
         when "storeb"
             $asm.puts "sb #{mipsOperands(operands)}"
         when "loadh"
-            $asm.puts "lhu #{mipsFlippedOperands(operands)}"
+            $asm.puts "lhu #{mipsLoadOperands(operands)}"
         when "loadhs"
-            $asm.puts "lh #{mipsFlippedOperands(operands)}"
+            $asm.puts "lh #{mipsLoadOperands(operands)}"
         when "storeh"
             $asm.puts "shv #{mipsOperands(operands)}"
         when "loadd"
-            $asm.puts "ldc1 #{mipsFlippedOperands(operands)}"
+            $asm.puts "ldc1 #{mipsLoadOperands(operands)}"
         when "stored"
             $asm.puts "sdc1 #{mipsOperands(operands)}"
         when "la"

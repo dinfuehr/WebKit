@@ -628,6 +628,10 @@ macro functionArityCheck(doneLabel, slowPath)
     # Reload CodeBlock and PC, since the slow_path clobbered it.
     loadp CodeBlock[cfr], t1
     loadp CodeBlock::m_instructions[t1], PC
+    if POISON
+        loadp _g_CodeBlockPoison, t2
+        xorp t2, PC
+    end
     jmp doneLabel
 end
 
@@ -2011,8 +2015,15 @@ macro doCall(slowPath, prepareCall)
     storei t2, ArgumentCount + PayloadOffset[t3]
     storei CellTag, Callee + TagOffset[t3]
     move t3, sp
-    prepareCall(LLIntCallLinkInfo::machineCodeTarget[t1], t2, t3, t4, JSEntryPtrTag)
-    callTargetFunction(LLIntCallLinkInfo::machineCodeTarget[t1], JSEntryPtrTag)
+    if POISON
+        loadp _g_JITCodePoison, t2
+        xorp LLIntCallLinkInfo::machineCodeTarget[t1], t2
+        prepareCall(t2, t1, t3, t4, JSEntryPtrTag)
+        callTargetFunction(t2, JSEntryPtrTag)
+    else
+        prepareCall(LLIntCallLinkInfo::machineCodeTarget[t1], t2, t3, t4, JSEntryPtrTag)
+        callTargetFunction(LLIntCallLinkInfo::machineCodeTarget[t1], JSEntryPtrTag)
+    end
 
 .opCallSlow:
     slowPathForCall(slowPath, prepareCall)
@@ -2129,8 +2140,15 @@ macro nativeCallTrampoline(executableOffsetToFunction)
         storep a0, [sp]
         loadi Callee + PayloadOffset[cfr], t1
         loadp JSFunction::m_executable[t1], t1
+        unpoison(_g_JSFunctionPoison, t1, t2)
         checkStackPointerAlignment(t3, 0xdead0001)
-        call executableOffsetToFunction[t1]
+        if POISON
+            loadp _g_NativeCodePoison, t2
+            xorp executableOffsetToFunction[t1], t2
+            call t2
+        else
+            call executableOffsetToFunction[t1]
+        end
         loadp Callee + PayloadOffset[cfr], t3
         andp MarkedBlockMask, t3
         loadp MarkedBlockFooterOffset + MarkedBlock::Footer::m_vm[t3], t3
@@ -2151,11 +2169,22 @@ macro nativeCallTrampoline(executableOffsetToFunction)
         move cfr, a0
         loadi Callee + PayloadOffset[cfr], t1
         loadp JSFunction::m_executable[t1], t1
+        unpoison(_g_JSFunctionPoison, t1, t2)
         checkStackPointerAlignment(t3, 0xdead0001)
-        if C_LOOP
-            cloopCallNative executableOffsetToFunction[t1]
+        if POISON
+            loadp _g_NativeCodePoison, t2
+            xorp executableOffsetToFunction[t1], t2
+            if C_LOOP
+                cloopCallNative t2
+            else
+                call t2
+            end
         else
-            call executableOffsetToFunction[t1]
+            if C_LOOP
+                cloopCallNative executableOffsetToFunction[t1]
+            else
+                call executableOffsetToFunction[t1]
+            end
         end
         loadp Callee + PayloadOffset[cfr], t3
         andp MarkedBlockMask, t3
@@ -2197,7 +2226,13 @@ macro internalFunctionCallTrampoline(offsetOfFunction)
         storep a0, [sp]
         loadi Callee + PayloadOffset[cfr], t1
         checkStackPointerAlignment(t3, 0xdead0001)
-        call offsetOfFunction[t1]
+        if POISON
+            loadp _g_NativeCodePoison, t2
+            xorp offsetOfFunction[t1], t2
+            call t2
+        else
+            call offsetOfFunction[t1]
+        end
         loadp Callee + PayloadOffset[cfr], t3
         andp MarkedBlockMask, t3
         loadp MarkedBlockFooterOffset + MarkedBlock::Footer::m_vm[t3], t3
@@ -2211,10 +2246,20 @@ macro internalFunctionCallTrampoline(offsetOfFunction)
         move cfr, a0
         loadi Callee + PayloadOffset[cfr], t1
         checkStackPointerAlignment(t3, 0xdead0001)
-        if C_LOOP
-            cloopCallNative offsetOfFunction[t1]
+        if POISON
+            loadp _g_NativeCodePoison, t2
+            xorp offsetOfFunction[t1], t2
+            if C_LOOP
+                cloopCallNative t2
+            else
+                call t2
+            end
         else
-            call offsetOfFunction[t1]
+            if C_LOOP
+                cloopCallNative offsetOfFunction[t1]
+            else
+                call offsetOfFunction[t1]
+            end
         end
         loadp Callee + PayloadOffset[cfr], t3
         andp MarkedBlockMask, t3

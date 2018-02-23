@@ -969,6 +969,9 @@ void JIT::emit_op_create_this(Instruction* currentInstruction)
     addSlowCase(branch8(NotEqual, Address(calleeReg, JSCell::typeInfoTypeOffset()), TrustedImm32(JSFunctionType)));
     loadPtr(Address(calleeReg, JSFunction::offsetOfRareData()), rareDataReg);
     addSlowCase(branchTestPtr(Zero, rareDataReg));
+#if ENABLE(POISON)
+    xorPtr(TrustedImmPtr(JSFunctionPoison::key()), rareDataReg);
+#endif
     load32(Address(rareDataReg, FunctionRareData::offsetOfObjectAllocationProfile() + ObjectAllocationProfile::offsetOfAllocator()), allocatorReg);
     loadPtr(Address(rareDataReg, FunctionRareData::offsetOfObjectAllocationProfile() + ObjectAllocationProfile::offsetOfStructure()), structureReg);
     addSlowCase(branch32(Equal, allocatorReg, TrustedImm32(Allocator().offset())));

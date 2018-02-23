@@ -10210,14 +10210,14 @@ void SpeculativeJIT::emitSwitchIntJump(
         m_jit.branch32(JITCompiler::AboveOrEqual, value, Imm32(table.ctiOffsets.size())),
         data->fallThrough.block);
     UNUSED_PARAM(poisonScratch); // Placate the 32-bit build.
-#if USE(JSVALUE64)
-    m_jit.move(TrustedImm64(JITCodePoison::key()), poisonScratch);
+#if ENABLE(POISON)
+    m_jit.move(TrustedImmPtr(JITCodePoison::key()), poisonScratch);
 #endif
     m_jit.move(TrustedImmPtr(table.ctiOffsets.begin()), scratch);
     m_jit.loadPtr(JITCompiler::BaseIndex(scratch, value, JITCompiler::timesPtr()), scratch);
-    
-#if USE(JSVALUE64)
-    m_jit.xor64(poisonScratch, scratch);
+
+#if ENABLE(POISON)
+    m_jit.xorPtr(poisonScratch, scratch);
 #endif
     m_jit.jump(scratch, JSSwitchPtrTag);
     data->didUseJumpTable = true;

@@ -197,7 +197,7 @@ private:
     template<typename U>
     ALWAYS_INLINE static PoisonedBits poison(const Poisoned* thisPoisoned, U ptr) { return ptr ? bitwise_cast<PoisonedBits>(ptr) ^ Poison::key(thisPoisoned) : 0; }
     template<typename U = T>
-    ALWAYS_INLINE static U unpoison(const Poisoned* thisPoisoned, PoisonedBits poisonedBits) { return poisonedBits ? bitwise_cast<U>(poisonedBits ^ Poison::key(thisPoisoned)) : bitwise_cast<U>(0ll); }
+    ALWAYS_INLINE static U unpoison(const Poisoned* thisPoisoned, PoisonedBits poisonedBits) { return poisonedBits ? bitwise_cast<U>(poisonedBits ^ Poison::key(thisPoisoned)) : bitwise_cast<U>(static_cast<intptr_t>(0)); }
 #else
     template<typename U>
     ALWAYS_INLINE static PoisonedBits poison(const Poisoned*, U ptr) { return bitwise_cast<PoisonedBits>(ptr); }

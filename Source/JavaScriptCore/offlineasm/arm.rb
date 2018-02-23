@@ -220,6 +220,40 @@ end
 # Actual lowering code follows.
 #
 
+def armLowerLabelReferences(list)
+    newList = []
+    list.each {
+        | node |
+        if node.is_a? Instruction
+            case node.opcode
+            when "loadi", "loadis", "loadp", "loadq", "loadb", "loadbs", "loadh", "loadhs"
+                labelRef = node.operands[0]
+                if labelRef.is_a? LabelReference
+                    tmp = Tmp.new(node.codeOrigin, :gpr)
+                    newList << Instruction.new(codeOrigin, "globaladdr", [LabelReference.new(node.codeOrigin, labelRef.label), node.operands[1], tmp])
+                    newList << Instruction.new(codeOrigin, node.opcode, [Address.new(node.codeOrigin, node.operands[1], Immediate.new(node.codeOrigin, labelRef.offset)), node.operands[1]])
+                else
+                    newList << node
+                end
+            when "leai", "leap", "leaq"
+                labelRef = node.operands[0]
+                if labelRef.is_a? LabelReference
+                    raise unless labelRef.offset == 0
+                    tmp = Tmp.new(node.codeOrigin, :gpr)
+                    newList << Instruction.new(codeOrigin, "globaladdr", [LabelReference.new(node.codeOrigin, labelRef.label), node.operands[1], tmp])
+                else
+                    newList << node
+                end
+            else
+                newList << node
+            end
+        else
+            newList << node
+        end
+    }
+    newList
+end
+
 def armOpcodeReversedOperands(opcode)
     m = /\Ab[ipb]/.match(opcode)
 
@@ -294,6 +328,7 @@ class Sequence
         result = riscLowerSimpleBranchOps(result)
         result = riscLowerHardBranchOps(result)
         result = riscLowerShiftOps(result)
+        result = armLowerLabelReferences(result)
         result = riscLowerMalformedAddresses(result) {
             | node, address |
             if address.is_a? BaseIndex
@@ -682,6 +717,28 @@ class Instruction
             $asm.puts "dmb sy"
         when "clrbp"
             $asm.puts "bic #{operands[2].armOperand}, #{operands[0].armOperand}, #{operands[1].armOperand}"
+        when "globaladdr"
+            labelRef = operands[0]
+            dest = operands[1]
+            temp = operands[2]
+
+            uid = $asm.newUID
+            gotLabel = "L_offlineasm_arm_got_#{uid}"
+            offsetLabel = "L_offlineasm_arm_got_offset_#{uid}"
+
+            $asm.puts "ldr #{dest.armOperand}, #{gotLabel}"
+            $asm.puts "ldr #{temp.armOperand}, #{gotLabel}+4"
+            $asm.puts "#{offsetLabel}:"
+            $asm.puts "add #{dest.armOperand}, pc, #{dest.armOperand}"
+            $asm.puts "ldr #{dest.armOperand}, [#{dest.armOperand}, #{temp.armOperand}]"
+
+            offset = $activeBackend == "ARMv7" ? 4 : 8
+
+            $asm.deferNextLabelAction {
+                $asm.puts "#{gotLabel}:"
+                $asm.puts ".word _GLOBAL_OFFSET_TABLE_-(#{offsetLabel}+#{offset})"
+                $asm.puts ".word #{labelRef.asmLabel}(GOT)"
+            }
         else
             lowerDefault
         end

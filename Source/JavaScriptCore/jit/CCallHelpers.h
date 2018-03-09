@@ -177,11 +177,26 @@ private:
         }
     }
 
+    template<unsigned NumberOfRegisters>
+    ALWAYS_INLINE void setupStubCrossArgs(std::array<GPRReg, NumberOfRegisters> destinations, std::array<FPRReg, NumberOfRegisters> sources) {
+#if CPU(MIPS)
+        for (unsigned i = 0; i < NumberOfRegisters; i++) {
+            GPRReg dest = destinations[i];
+            FPRReg source = sources[i];
+
+            moveDouble(source, dest);
+        }
+#else
+        static_assert(NumberOfRegisters == 0, "should only be used on MIPS for now.");
+#endif
+    }
+
     template<typename RegType>
     using InfoTypeForReg = decltype(toInfoFromReg(RegType(-1)));
 
+    // extraGPRArgs is used to track 64-bit argument types passed in register
     // extraPoke is used to track 64-bit argument types passed on the stack.
-    template<unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned extraPoke>
+    template<unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke>
     struct ArgCollection {
         ArgCollection()
         {
@@ -189,63 +204,97 @@ private:
             gprDestinations.fill(InvalidGPRReg);
             fprSources.fill(InvalidFPRReg);
             fprDestinations.fill(InvalidFPRReg);
+            crossSources.fill(InvalidFPRReg);
+            crossDestinations.fill(InvalidGPRReg);
         }
 
-        template<unsigned a, unsigned b, unsigned c, unsigned d, unsigned e>
-        ArgCollection(ArgCollection<a, b, c, d, e>& other)
+        template<unsigned a, unsigned b, unsigned c, unsigned d, unsigned e, unsigned f, unsigned g>
+        ArgCollection(ArgCollection<a, b, c, d, e, f, g>& other)
         {
             gprSources = other.gprSources;
             gprDestinations = other.gprDestinations;
             fprSources = other.fprSources;
             fprDestinations = other.fprDestinations;
+            crossSources = other.crossSources;
+            crossDestinations = other.crossDestinations;
         }
 
-        ArgCollection<numGPRArgs + 1, numGPRSources + 1, numFPRArgs, numFPRSources, extraPoke> pushRegArg(GPRReg argument, GPRReg destination)
+        ArgCollection<numGPRArgs + 1, numGPRSources + 1, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> pushRegArg(GPRReg argument, GPRReg destination)
         {
-            ArgCollection<numGPRArgs + 1, numGPRSources + 1, numFPRArgs, numFPRSources, extraPoke> result(*this);
+            ArgCollection<numGPRArgs + 1, numGPRSources + 1, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> result(*this);
 
             result.gprSources[numGPRSources] = argument;
             result.gprDestinations[numGPRSources] = destination;
             return result;
         }
 
-        ArgCollection<numGPRArgs, numGPRSources, numFPRArgs + 1, numFPRSources + 1, extraPoke> pushRegArg(FPRReg argument, FPRReg destination)
+        ArgCollection<numGPRArgs, numGPRSources, numFPRArgs + 1, numFPRSources + 1, numCrossSources, extraGPRArgs, extraPoke> pushRegArg(FPRReg argument, FPRReg destination)
         {
-            ArgCollection<numGPRArgs, numGPRSources, numFPRArgs + 1, numFPRSources + 1, extraPoke> result(*this);
+            ArgCollection<numGPRArgs, numGPRSources, numFPRArgs + 1, numFPRSources + 1, numCrossSources, extraGPRArgs, extraPoke> result(*this);
 
             result.fprSources[numFPRSources] = argument;
             result.fprDestinations[numFPRSources] = destination;
             return result;
         }
 
-        ArgCollection<numGPRArgs + 1, numGPRSources, numFPRArgs, numFPRSources, extraPoke> addGPRArg()
+        ArgCollection<numGPRArgs, numGPRSources, numFPRArgs + 1, numFPRSources, numCrossSources + 1, extraGPRArgs, extraPoke> pushRegArg(FPRReg argument, GPRReg destination)
         {
-            return ArgCollection<numGPRArgs + 1, numGPRSources, numFPRArgs, numFPRSources, extraPoke>(*this);
+            ArgCollection<numGPRArgs, numGPRSources, numFPRArgs + 1, numFPRSources, numCrossSources + 1, extraGPRArgs, extraPoke> result(*this);
+
+            result.crossSources[numCrossSources] = argument;
+            result.crossDestinations[numCrossSources] = destination;
+            return result;
         }
 
-        ArgCollection<numGPRArgs + 1, numGPRSources, numFPRArgs, numFPRSources, extraPoke> addStackArg(GPRReg)
+        ArgCollection<numGPRArgs, numGPRSources + 1, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs + 1, extraPoke> pushExtraRegArg(GPRReg argument, GPRReg destination)
         {
-            return ArgCollection<numGPRArgs + 1, numGPRSources, numFPRArgs, numFPRSources, extraPoke>(*this);
+            ArgCollection<numGPRArgs, numGPRSources + 1, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs + 1, extraPoke> result(*this);
+
+            result.gprSources[numGPRSources] = argument;
+            result.gprDestinations[numGPRSources] = destination;
+            return result;
         }
 
-        ArgCollection<numGPRArgs, numGPRSources, numFPRArgs + 1, numFPRSources, extraPoke> addStackArg(FPRReg)
+        ArgCollection<numGPRArgs + 1, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> addGPRArg()
         {
-            return ArgCollection<numGPRArgs, numGPRSources, numFPRArgs + 1, numFPRSources, extraPoke>(*this);
+            return ArgCollection<numGPRArgs + 1, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke>(*this);
         }
 
-        ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, extraPoke + 1> addPoke()
+        ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs + 1, extraPoke> addGPRExtraArg()
         {
-            return ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, extraPoke + 1>(*this);
+            return ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs + 1, extraPoke>(*this);
+        }
+
+        ArgCollection<numGPRArgs + 1, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> addStackArg(GPRReg)
+        {
+            return ArgCollection<numGPRArgs + 1, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke>(*this);
+        }
+
+        ArgCollection<numGPRArgs, numGPRSources, numFPRArgs + 1, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> addStackArg(FPRReg)
+        {
+            return ArgCollection<numGPRArgs, numGPRSources, numFPRArgs + 1, numFPRSources, numCrossSources, extraGPRArgs, extraPoke>(*this);
+        }
+
+        ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke + 1> addPoke()
+        {
+            return ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke + 1>(*this);
         }
 
 
-        unsigned argCount(GPRReg) { return numGPRArgs; }
+        unsigned argCount(GPRReg) { return numGPRArgs + extraGPRArgs; }
         unsigned argCount(FPRReg) { return numFPRArgs; }
 
+        // store GPR -> GPR assignments
         std::array<GPRReg, GPRInfo::numberOfRegisters> gprSources;
         std::array<GPRReg, GPRInfo::numberOfRegisters> gprDestinations;
+
+        // store FPR -> FPR assignments
         std::array<FPRReg, FPRInfo::numberOfRegisters> fprSources;
         std::array<FPRReg, FPRInfo::numberOfRegisters> fprDestinations;
+
+        // store FPR -> GPR assignments
+        std::array<FPRReg, GPRInfo::numberOfRegisters> crossSources;
+        std::array<GPRReg, GPRInfo::numberOfRegisters> crossDestinations;
     };
 
     template<unsigned TargetSize, typename RegType>
@@ -264,18 +313,33 @@ private:
         return result;
     }
 
-    template<typename ArgType>
-    ALWAYS_INLINE void pokeForArgument(ArgType arg, unsigned currentGPRArgument, unsigned currentFPRArgument, unsigned extraPoke)
+    ALWAYS_INLINE unsigned calculatePokeOffset(unsigned currentGPRArgument, unsigned currentFPRArgument, unsigned extraGPRArgs, unsigned extraPoke)
     {
         // Clang claims that it cannot find the symbol for FPRReg/GPRReg::numberOfArgumentRegisters when they are passed directly to std::max... seems like a bug
         unsigned numberOfFPArgumentRegisters = FPRInfo::numberOfArgumentRegisters;
         unsigned numberOfGPArgumentRegisters = GPRInfo::numberOfArgumentRegisters;
-        ASSERT(currentGPRArgument >= GPRInfo::numberOfArgumentRegisters || currentFPRArgument >= FPRInfo::numberOfArgumentRegisters);
+
+        unsigned currentGPRArgumentWithExtra = currentGPRArgument + extraGPRArgs;
+        ASSERT(currentGPRArgumentWithExtra >= GPRInfo::numberOfArgumentRegisters || currentFPRArgument >= FPRInfo::numberOfArgumentRegisters);
 
         unsigned pokeOffset = POKE_ARGUMENT_OFFSET + extraPoke;
-        pokeOffset += std::max(currentGPRArgument, numberOfGPArgumentRegisters) - numberOfGPArgumentRegisters;
+        pokeOffset += std::max(currentGPRArgumentWithExtra, numberOfGPArgumentRegisters) - numberOfGPArgumentRegisters;
         pokeOffset += std::max(currentFPRArgument, numberOfFPArgumentRegisters) - numberOfFPArgumentRegisters;
+
+        return pokeOffset;
+    }
+
+    template<typename ArgType>
+    ALWAYS_INLINE void pokeForArgument(ArgType arg, unsigned currentGPRArgument, unsigned currentFPRArgument, unsigned extraGPRArgs, unsigned extraPoke)
+    {
+        unsigned pokeOffset = calculatePokeOffset(currentGPRArgument, currentFPRArgument, extraGPRArgs, extraPoke);
         poke(arg, pokeOffset);
+    }
+
+    ALWAYS_INLINE bool pokeAligned(unsigned currentGPRArgument, unsigned currentFPRArgument, unsigned extraGPRArgs, unsigned extraPoke)
+    {
+        unsigned pokeOffset = calculatePokeOffset(currentGPRArgument, currentFPRArgument, extraGPRArgs, extraPoke);
+        return (pokeOffset & 1) == 0;
     }
 
     // In the auto-calling convention code below the order of operations is:
@@ -290,8 +354,8 @@ private:
 
 #if USE(JSVALUE64)
 
-    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned extraPoke, typename RegType, typename... Args>
-    ALWAYS_INLINE void marshallArgumentRegister(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, extraPoke> argSourceRegs, RegType arg, Args... args)
+    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke, typename RegType, typename... Args>
+    ALWAYS_INLINE void marshallArgumentRegister(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> argSourceRegs, RegType arg, Args... args)
     {
         using InfoType = InfoTypeForReg<RegType>;
         unsigned numArgRegisters = InfoType::numberOfArgumentRegisters;
@@ -302,135 +366,271 @@ private:
             return;
         }
 
-        pokeForArgument(arg, numGPRArgs, numFPRArgs, extraPoke);
+        pokeForArgument(arg, numGPRArgs, numFPRArgs, extraGPRArgs, extraPoke);
         setupArgumentsImpl<OperationType>(argSourceRegs.addStackArg(arg), args...);
     }
 
-    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned extraPoke, typename... Args>
-    ALWAYS_INLINE void setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, extraPoke> argSourceRegs, FPRReg arg, Args... args)
+    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke, typename... Args>
+    ALWAYS_INLINE void setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> argSourceRegs, FPRReg arg, Args... args)
     {
         static_assert(std::is_same<CURRENT_ARGUMENT_TYPE, double>::value, "We should only be passing FPRRegs to a double");
         marshallArgumentRegister<OperationType>(argSourceRegs, arg, args...);
     }
 
-    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned extraPoke, typename... Args>
-    ALWAYS_INLINE void setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, extraPoke> argSourceRegs, GPRReg arg, Args... args)
+    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke, typename... Args>
+    ALWAYS_INLINE void setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> argSourceRegs, GPRReg arg, Args... args)
     {
         marshallArgumentRegister<OperationType>(argSourceRegs, arg, args...);
     }
 
-    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned extraPoke, typename... Args>
-    ALWAYS_INLINE void setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, extraPoke> argSourceRegs, JSValueRegs arg, Args... args)
+    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke, typename... Args>
+    ALWAYS_INLINE void setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> argSourceRegs, JSValueRegs arg, Args... args)
     {
         marshallArgumentRegister<OperationType>(argSourceRegs, arg.gpr(), args...);
     }
 
-#else // USE(JSVALUE64)
+#else // USE(JSVALUE32_64)
 
-    // These functions are a hack for X86 since it has no argument gprs...
+    unsigned align2(unsigned val) {
+        return (val + 1) & (~1);
+    }
 
-    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned extraPoke, typename... Args>
-    ALWAYS_INLINE void setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, extraPoke> argSourceRegs, FPRReg arg, Args... args)
+#if CPU(MIPS)
+    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke, typename... Args>
+    ALWAYS_INLINE void setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> argSourceRegs, FPRReg arg, Args... args)
     {
         static_assert(std::is_same<CURRENT_ARGUMENT_TYPE, double>::value, "We should only be passing FPRRegs to a double");
-        pokeForArgument(arg, numGPRArgs, numFPRArgs, extraPoke);
-        setupArgumentsImpl<OperationType>(argSourceRegs.addStackArg(arg).addPoke(), args...);
-    }
 
-    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned extraPoke, typename... Args>
+        unsigned numberOfFPArgumentRegisters = FPRInfo::numberOfArgumentRegisters;
+        unsigned numberOfGPArgumentRegisters = GPRInfo::numberOfArgumentRegisters;
+        unsigned currentFPArgCount = argSourceRegs.argCount(arg);
+        unsigned currentGPArgCount = argSourceRegs.argCount(GPRInfo::regT0);
+        unsigned alignedGPArgCount = align2(currentGPArgCount);
+
+        if (currentFPArgCount < numberOfFPArgumentRegisters && numGPRArgs == 0) {
+            auto updatedArgSourceRegs = argSourceRegs.pushRegArg(arg, FPRInfo::toArgumentRegister(currentFPArgCount));
+
+            setupArgumentsImpl<OperationType>(updatedArgSourceRegs.addGPRExtraArg().addGPRExtraArg(), args...);
+            return;
+
+        } else if (alignedGPArgCount + 1 < numberOfGPArgumentRegisters) {
+            auto updatedArgSourceRegs = argSourceRegs.pushRegArg(arg, GPRInfo::toArgumentRegister(alignedGPArgCount));
+
+            if (alignedGPArgCount > currentGPArgCount) {
+                setupArgumentsImpl<OperationType>(updatedArgSourceRegs.addGPRExtraArg().addGPRExtraArg().addGPRExtraArg(), args...);
+            } else {
+                setupArgumentsImpl<OperationType>(updatedArgSourceRegs.addGPRExtraArg().addGPRExtraArg(), args...);
+            }
+
+            return;
+        } else if (currentGPArgCount < numberOfGPArgumentRegisters) {
+                pokeForArgument(arg, numGPRArgs, numFPRArgs, extraGPRArgs+1, extraPoke);
+                setupArgumentsImpl<OperationType>(argSourceRegs.addGPRExtraArg().addStackArg(arg).addPoke(), args...);
+
+        } else {
+            if (pokeAligned(numGPRArgs, numFPRArgs, extraGPRArgs, extraPoke)) {
+                pokeForArgument(arg, numGPRArgs, numFPRArgs, extraGPRArgs, extraPoke);
+                setupArgumentsImpl<OperationType>(argSourceRegs.addStackArg(arg).addPoke(), args...);
+            } else {
+                pokeForArgument(arg, numGPRArgs, numFPRArgs, extraGPRArgs, extraPoke+1);
+                setupArgumentsImpl<OperationType>(argSourceRegs.addStackArg(arg).addPoke().addPoke(), args...);
+            }
+        }
+    }
+#else
+    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke, typename... Args>
+    ALWAYS_INLINE void setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> argSourceRegs, FPRReg arg, Args... args)
+    {
+        static_assert(std::is_same<CURRENT_ARGUMENT_TYPE, double>::value, "We should only be passing FPRRegs to a double");
+
+        unsigned numArgRegisters = FPRInfo::numberOfArgumentRegisters;
+        unsigned currentArgCount = argSourceRegs.argCount(arg);
+
+        if (currentArgCount < numArgRegisters) {
+            auto updatedArgSourceRegs = argSourceRegs.pushRegArg(arg, FPRInfo::toArgumentRegister(currentArgCount));
+            setupArgumentsImpl<OperationType>(updatedArgSourceRegs, args...);
+            return;
+        }
+
+        if (!GPRInfo::align64BitArgumentsOnStack || pokeAligned(numGPRArgs, numFPRArgs, extraGPRArgs, extraPoke)) {
+            pokeForArgument(arg, numGPRArgs, numFPRArgs, extraGPRArgs, extraPoke);
+            setupArgumentsImpl<OperationType>(argSourceRegs.addStackArg(arg).addPoke(), args...);
+        } else {
+            pokeForArgument(arg, numGPRArgs, numFPRArgs, extraGPRArgs, extraPoke+1);
+            setupArgumentsImpl<OperationType>(argSourceRegs.addStackArg(arg).addPoke().addPoke(), args...);
+        }
+    }
+#endif
+
+    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke, typename... Args>
     ALWAYS_INLINE std::enable_if_t<sizeof(CURRENT_ARGUMENT_TYPE) <= 4>
-    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, extraPoke> argSourceRegs, GPRReg arg, Args... args)
+    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> argSourceRegs, GPRReg arg, Args... args)
     {
-        pokeForArgument(arg, numGPRArgs, numFPRArgs, extraPoke);
-        setupArgumentsImpl<OperationType>(argSourceRegs.addGPRArg(), args...);
+        unsigned numArgRegisters = GPRInfo::numberOfArgumentRegisters;
+        unsigned currentArgCount = argSourceRegs.argCount(arg);
+        if (currentArgCount < numArgRegisters) {
+            auto updatedArgSourceRegs = argSourceRegs.pushRegArg(arg, GPRInfo::toArgumentRegister(currentArgCount));
+            setupArgumentsImpl<OperationType>(updatedArgSourceRegs, args...);
+            return;
+        }
+
+        pokeForArgument(arg, numGPRArgs, numFPRArgs, extraGPRArgs, extraPoke);
+        setupArgumentsImpl<OperationType>(argSourceRegs.addStackArg(arg), args...);
     }
 
-    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned extraPoke, typename... Args>
-    ALWAYS_INLINE std::enable_if_t<std::is_same<CURRENT_ARGUMENT_TYPE, EncodedJSValue>::value>
-    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, extraPoke> argSourceRegs, JSValue::JSCellTag, GPRReg payload, Args... args)
+    template<typename OperationType, typename Arg1, typename Arg2, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke, typename... Args>
+    ALWAYS_INLINE void pokeArgumentsAligned(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> argSourceRegs, Arg1 arg1, Arg2 arg2, Args... args)
     {
-        pokeForArgument(payload, numGPRArgs, numFPRArgs, extraPoke);
-        pokeForArgument(TrustedImm32(JSValue::CellTag), numGPRArgs, numFPRArgs, extraPoke + 1);
-        setupArgumentsImpl<OperationType>(argSourceRegs.addGPRArg().addPoke(), args...);
+        unsigned numArgRegisters = GPRInfo::numberOfArgumentRegisters;
+        unsigned currentArgCount = argSourceRegs.argCount(GPRInfo::regT0);
+
+        if (currentArgCount + 1 == numArgRegisters) {
+            pokeForArgument(arg1, numGPRArgs, numFPRArgs, extraGPRArgs + 1, extraPoke);
+            pokeForArgument(arg2, numGPRArgs, numFPRArgs, extraGPRArgs + 1, extraPoke + 1);
+            setupArgumentsImpl<OperationType>(argSourceRegs.addGPRExtraArg().addGPRArg().addPoke(), args...);
+
+        } else if (!GPRInfo::align64BitArgumentsOnStack || pokeAligned(numGPRArgs, numFPRArgs, extraGPRArgs, extraPoke)) {
+            pokeForArgument(arg1, numGPRArgs, numFPRArgs, extraGPRArgs, extraPoke);
+            pokeForArgument(arg2, numGPRArgs, numFPRArgs, extraGPRArgs, extraPoke + 1);
+            setupArgumentsImpl<OperationType>(argSourceRegs.addGPRArg().addPoke(), args...);
+
+        } else {
+            pokeForArgument(arg1, numGPRArgs, numFPRArgs, extraGPRArgs, extraPoke + 1);
+            pokeForArgument(arg2, numGPRArgs, numFPRArgs, extraGPRArgs, extraPoke + 2);
+            setupArgumentsImpl<OperationType>(argSourceRegs.addGPRArg().addPoke().addPoke(), args...);
+        }
     }
 
-    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned extraPoke, typename... Args>
+    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke, typename... Args>
     ALWAYS_INLINE std::enable_if_t<std::is_same<CURRENT_ARGUMENT_TYPE, EncodedJSValue>::value>
-    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, extraPoke> argSourceRegs, JSValue::JSCellTag, TrustedImmPtr payload, Args... args)
+    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> argSourceRegs, JSValue::JSCellTag, GPRReg payload, Args... args)
     {
-        pokeForArgument(payload, numGPRArgs, numFPRArgs, extraPoke);
-        pokeForArgument(TrustedImm32(JSValue::CellTag), numGPRArgs, numFPRArgs, extraPoke + 1);
-        setupArgumentsImpl<OperationType>(argSourceRegs.addGPRArg().addPoke(), args...);
+        unsigned numArgRegisters = GPRInfo::numberOfArgumentRegisters;
+        unsigned currentArgCount = argSourceRegs.argCount(payload);
+        unsigned alignedArgCount = align2(currentArgCount);
+
+        if (alignedArgCount + 1 < numArgRegisters) {
+            auto updatedArgSourceRegs = argSourceRegs.pushRegArg(payload, GPRInfo::toArgumentRegister(alignedArgCount));
+
+            if (alignedArgCount > currentArgCount) {
+                setupArgumentsImpl<OperationType>(updatedArgSourceRegs.addGPRExtraArg().addGPRExtraArg(), args...);
+            } else {
+                setupArgumentsImpl<OperationType>(updatedArgSourceRegs.addGPRExtraArg(), args...);
+            }
+
+            move(TrustedImm32(JSValue::CellTag), GPRInfo::toArgumentRegister(alignedArgCount+1));
+
+        } else {
+            pokeArgumentsAligned<OperationType>(argSourceRegs, payload, TrustedImm32(JSValue::CellTag), args...);
+        }
     }
 
-    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned extraPoke, typename... Args>
+    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke, typename... Args>
     ALWAYS_INLINE std::enable_if_t<std::is_same<CURRENT_ARGUMENT_TYPE, EncodedJSValue>::value>
-    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, extraPoke> argSourceRegs, JSValueRegs arg, Args... args)
+    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> argSourceRegs, JSValue::JSCellTag, TrustedImmPtr payload, Args... args)
     {
-        pokeForArgument(arg.payloadGPR(), numGPRArgs, numFPRArgs, extraPoke);
-        pokeForArgument(arg.tagGPR(), numGPRArgs, numFPRArgs, extraPoke + 1);
-        setupArgumentsImpl<OperationType>(argSourceRegs.addGPRArg().addPoke(), args...);
+        unsigned numArgRegisters = GPRInfo::numberOfArgumentRegisters;
+        unsigned currentArgCount = argSourceRegs.argCount(GPRInfo::regT0);
+        unsigned alignedArgCount = align2(currentArgCount);
+
+        if (alignedArgCount + 1 < numArgRegisters) {
+            if (alignedArgCount > currentArgCount) {
+                setupArgumentsImpl<OperationType>(argSourceRegs.addGPRArg().addGPRExtraArg().addGPRExtraArg(), args...);
+            } else {
+                setupArgumentsImpl<OperationType>(argSourceRegs.addGPRArg().addGPRExtraArg(), args...);
+            }
+
+            move(payload, GPRInfo::toArgumentRegister(alignedArgCount));
+            move(TrustedImm32(JSValue::CellTag), GPRInfo::toArgumentRegister(alignedArgCount+1));
+
+        } else {
+            pokeArgumentsAligned<OperationType>(argSourceRegs, payload, TrustedImm32(JSValue::CellTag), args...);
+        }
+    }
+
+    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke, typename... Args>
+    ALWAYS_INLINE std::enable_if_t<std::is_same<CURRENT_ARGUMENT_TYPE, EncodedJSValue>::value>
+    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> argSourceRegs, JSValueRegs arg, Args... args)
+    {
+        unsigned numArgRegisters = GPRInfo::numberOfArgumentRegisters;
+        unsigned currentArgCount = argSourceRegs.argCount(arg.tagGPR());
+        unsigned alignedArgCount = align2(currentArgCount);
+
+        if (alignedArgCount + 1 < numArgRegisters) {
+            auto updatedArgSourceRegs1 = argSourceRegs.pushRegArg(arg.payloadGPR(), GPRInfo::toArgumentRegister(alignedArgCount));
+            auto updatedArgSourceRegs2 = updatedArgSourceRegs1.pushExtraRegArg(arg.tagGPR(), GPRInfo::toArgumentRegister(alignedArgCount+1));
+
+            if (alignedArgCount > currentArgCount) {
+                setupArgumentsImpl<OperationType>(updatedArgSourceRegs2.addGPRExtraArg(), args...);
+            } else {
+                setupArgumentsImpl<OperationType>(updatedArgSourceRegs2, args...);
+            }
+
+        } else {
+            pokeArgumentsAligned<OperationType>(argSourceRegs, arg.payloadGPR(), arg.tagGPR(), args...);
+        }
     }
 
 #endif // USE(JSVALUE64)
 
-    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned extraPoke, typename Arg, typename... Args>
+    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke, typename Arg, typename... Args>
     ALWAYS_INLINE std::enable_if_t<
         std::is_base_of<TrustedImm, Arg>::value
         || std::is_convertible<Arg, TrustedImm>::value> // We have this since DFGSpeculativeJIT has it's own implementation of TrustedImmPtr
-    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, extraPoke> argSourceRegs, Arg arg, Args... args)
+    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> argSourceRegs, Arg arg, Args... args)
     {
         // Right now this only supports non-floating point immediate arguments since we never call operations with non-register values.
         // If we ever needed to support immediate floating point arguments we would need to duplicate this logic for both types, which sounds
         // gross so it's probably better to do that marshalling before the call operation...
         static_assert(!std::is_floating_point<CURRENT_ARGUMENT_TYPE>::value, "We don't support immediate floats/doubles in setupArguments");
         auto numArgRegisters = GPRInfo::numberOfArgumentRegisters;
-        if (numGPRArgs < numArgRegisters) {
+        unsigned currentArgCount = numGPRArgs + extraGPRArgs;
+        if (currentArgCount < numArgRegisters) {
             setupArgumentsImpl<OperationType>(argSourceRegs.addGPRArg(), args...);
-            move(arg, GPRInfo::toArgumentRegister(numGPRArgs));
+            move(arg, GPRInfo::toArgumentRegister(currentArgCount));
             return;
         }
 
-        pokeForArgument(arg, numGPRArgs, numFPRArgs, extraPoke);
+        pokeForArgument(arg, numGPRArgs, numFPRArgs, extraGPRArgs, extraPoke);
         setupArgumentsImpl<OperationType>(argSourceRegs.addGPRArg(), args...);
     }
 
-    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned extraPoke, typename Arg, typename... Args>
+    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke, typename Arg, typename... Args>
     ALWAYS_INLINE std::enable_if_t<
         std::is_same<CURRENT_ARGUMENT_TYPE, Arg>::value
         && std::is_integral<CURRENT_ARGUMENT_TYPE>::value
         && (sizeof(CURRENT_ARGUMENT_TYPE) <= 4)>
-    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, extraPoke> argSourceRegs, Arg arg, Args... args)
+    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> argSourceRegs, Arg arg, Args... args)
     {
         setupArgumentsImpl<OperationType>(argSourceRegs, TrustedImm32(arg), args...);
     }
 
-    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned extraPoke, typename Arg, typename... Args>
+    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke, typename Arg, typename... Args>
     ALWAYS_INLINE std::enable_if_t<
         std::is_same<CURRENT_ARGUMENT_TYPE, Arg>::value
         && std::is_integral<CURRENT_ARGUMENT_TYPE>::value
         && (sizeof(CURRENT_ARGUMENT_TYPE) == 8)>
-    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, extraPoke> argSourceRegs, Arg arg, Args... args)
+    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> argSourceRegs, Arg arg, Args... args)
     {
         setupArgumentsImpl<OperationType>(argSourceRegs, TrustedImm64(arg), args...);
     }
 
-    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned extraPoke, typename Arg, typename... Args>
+    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke, typename Arg, typename... Args>
     ALWAYS_INLINE std::enable_if_t<
         std::is_pointer<CURRENT_ARGUMENT_TYPE>::value
         && ((std::is_pointer<Arg>::value && std::is_convertible<std::remove_const_t<std::remove_pointer_t<Arg>>*, CURRENT_ARGUMENT_TYPE>::value)
             || std::is_same<Arg, std::nullptr_t>::value)>
-    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, extraPoke> argSourceRegs, Arg arg, Args... args)
+    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> argSourceRegs, Arg arg, Args... args)
     {
         setupArgumentsImpl<OperationType>(argSourceRegs, TrustedImmPtr(arg), args...);
     }
 
     // Special case DFG::RegisteredStructure because it's really annoying to deal with otherwise...
-    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned extraPoke, typename Arg, typename... Args>
+    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke, typename Arg, typename... Args>
     ALWAYS_INLINE std::enable_if_t<
         std::is_same<CURRENT_ARGUMENT_TYPE, Structure*>::value
         && std::is_same<Arg, DFG::RegisteredStructure>::value>
-    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, extraPoke> argSourceRegs, Arg arg, Args... args)
+    setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> argSourceRegs, Arg arg, Args... args)
     {
         setupArgumentsImpl<OperationType>(argSourceRegs, TrustedImmPtr(arg.get()), args...);
     }
@@ -438,13 +638,17 @@ private:
 #undef CURRENT_ARGUMENT_TYPE
 
     // Base case; set up the argument registers.
-    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned extraPoke>
-    ALWAYS_INLINE void setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, extraPoke> argSourceRegs)
+    template<typename OperationType, unsigned numGPRArgs, unsigned numGPRSources, unsigned numFPRArgs, unsigned numFPRSources, unsigned numCrossSources, unsigned extraGPRArgs, unsigned extraPoke>
+    ALWAYS_INLINE void setupArgumentsImpl(ArgCollection<numGPRArgs, numGPRSources, numFPRArgs, numFPRSources, numCrossSources, extraGPRArgs, extraPoke> argSourceRegs)
     {
         static_assert(FunctionTraits<OperationType>::arity == numGPRArgs + numFPRArgs, "One last sanity check");
-        static_assert(FunctionTraits<OperationType>::cCallArity() == numGPRArgs + numFPRArgs + extraPoke, "Check the CCall arity");
+#if CPU(JSVALUE64)
+        static_assert(FunctionTraits<OperationType>::cCallArity() == numGPRArgs + numFPRArgs + extraGPRArgs + extraPoke, "Check the CCall arity");
+#endif
         setupStubArgs<numGPRSources, GPRReg>(clampArrayToSize<numGPRSources, GPRReg>(argSourceRegs.gprDestinations), clampArrayToSize<numGPRSources, GPRReg>(argSourceRegs.gprSources));
-
+#if CPU(MIPS)
+        setupStubCrossArgs(clampArrayToSize<numCrossSources, GPRReg>(argSourceRegs.crossDestinations), clampArrayToSize<numCrossSources, FPRReg>(argSourceRegs.crossSources));
+#endif
         setupStubArgs<numFPRSources, FPRReg>(clampArrayToSize<numFPRSources, FPRReg>(argSourceRegs.fprDestinations), clampArrayToSize<numFPRSources, FPRReg>(argSourceRegs.fprSources));
     }
 
@@ -459,7 +663,7 @@ public:
         // This only really works for 64-bit since jsvalue regs mess things up for 32-bit...
         static_assert(FunctionTraits<OperationType>::cCallArity() == sizeof...(Args) + 1, "Basic sanity check");
 #endif
-        setupArgumentsImpl<OperationType, 0, 0, 0, 0, 0>(ArgCollection<0, 0, 0, 0, 0>(), GPRInfo::callFrameRegister, args...);
+        setupArgumentsImpl<OperationType, 0, 0, 0, 0, 0, 0, 0>(ArgCollection<0, 0, 0, 0, 0, 0, 0>(), GPRInfo::callFrameRegister, args...);
     }
 
     template<typename OperationType, typename... Args>
@@ -469,7 +673,7 @@ public:
         // This only really works for 64-bit since jsvalue regs mess things up for 32-bit...
         static_assert(FunctionTraits<OperationType>::cCallArity() == sizeof...(Args), "Basic sanity check");
 #endif
-        setupArgumentsImpl<OperationType, 0, 0, 0, 0, 0>(ArgCollection<0, 0, 0, 0, 0>(), args...);
+        setupArgumentsImpl<OperationType, 0, 0, 0, 0, 0, 0, 0>(ArgCollection<0, 0, 0, 0, 0, 0, 0>(), args...);
     }
 
 #undef FIRST_ARGUMENT_TYPE

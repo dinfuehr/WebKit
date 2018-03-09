@@ -107,7 +107,12 @@ class FPRInfo {
 public:
     typedef FPRReg RegisterType;
     static const unsigned numberOfRegisters = 6;
+
+#if CPU(ARM_HARDFP)
+    static const unsigned numberOfArgumentRegisters = 8;
+#else
     static const unsigned numberOfArgumentRegisters = 0;
+#endif
 
     // Temporary registers.
     // d7 is use by the MacroAssembler as fpTempRegister.
@@ -142,6 +147,11 @@ public:
     static unsigned toIndex(FPRReg reg)
     {
         return (unsigned)reg;
+    }
+    static FPRReg toArgumentRegister(unsigned index)
+    {
+        ASSERT(index < numberOfArgumentRegisters);
+        return static_cast<FPRReg>(index);
     }
 
     static const char* debugName(FPRReg reg)
@@ -256,6 +266,7 @@ class FPRInfo {
 public:
     typedef FPRReg RegisterType;
     static const unsigned numberOfRegisters = 7;
+    static const unsigned numberOfArgumentRegisters = 2;
 
     // Temporary registers.
     static const FPRReg fpRegT0 = MIPSRegisters::f0;
@@ -278,6 +289,15 @@ public:
 
         ASSERT(index < numberOfRegisters);
         return registerForIndex[index];
+    }
+
+    static FPRReg toArgumentRegister(unsigned index)
+    {
+        ASSERT(index < numberOfArgumentRegisters);
+        static const FPRReg indexForRegister[2] = {
+            argumentFPR0, argumentFPR1
+        };
+        return indexForRegister[index];
     }
 
     static unsigned toIndex(FPRReg reg)

@@ -340,6 +340,7 @@ public:
     typedef GPRReg RegisterType;
     static const unsigned numberOfRegisters = 6;
     static const unsigned numberOfArgumentRegisters = NUMBER_OF_ARGUMENT_REGISTERS;
+    static const bool align64BitArgumentsOnStack = false;
 
     // Temporary registers.
     static const GPRReg regT0 = X86Registers::eax;
@@ -535,6 +536,7 @@ public:
     typedef GPRReg RegisterType;
     static const unsigned numberOfRegisters = 9;
     static const unsigned numberOfArgumentRegisters = NUMBER_OF_ARGUMENT_REGISTERS;
+    static const bool align64BitArgumentsOnStack = true;
 
     // Temporary registers.
     static const GPRReg regT0 = ARMRegisters::r0;
@@ -729,6 +731,7 @@ public:
     typedef GPRReg RegisterType;
     static const unsigned numberOfRegisters = 7;
     static const unsigned numberOfArgumentRegisters = NUMBER_OF_ARGUMENT_REGISTERS;
+    static const bool align64BitArgumentsOnStack = true;
 
     // regT0 must be v0 for returning a 32-bit value.
     // regT1 must be v1 for returning a pair of 32-bit value.

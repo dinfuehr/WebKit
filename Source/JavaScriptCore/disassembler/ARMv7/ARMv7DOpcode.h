@@ -1162,16 +1162,17 @@ protected:
     unsigned vm() { return m_opcode & 0xf; }
 };
 
-class ARMv7DOpcodeVLDR : public ARMv7D32BitOpcode {
+class ARMv7DOpcodeVLDRSTR : public ARMv7D32BitOpcode {
 public:
-    static const uint32_t s_mask = 0x0f300e00;
-    static const uint32_t s_pattern = 0x0d100a00;
+    static const uint32_t s_mask = 0x0f200e00;
+    static const uint32_t s_pattern = 0x0d000a00;
 
-    DEFINE_STATIC_FORMAT32(ARMv7DOpcodeVLDR, thisObj);
+    DEFINE_STATIC_FORMAT32(ARMv7DOpcodeVLDRSTR, thisObj);
 
 protected:
     const char* format();
 
+    const char *opName() { return (m_opcode >> 20) & 0x1 ? "vldr" : "vstr"; }
     unsigned condition() { return m_opcode >> 28; }
     unsigned uBit() { return (m_opcode >> 23) & 0x1; }
     unsigned rn() { return (m_opcode >> 16) & 0xf; }
@@ -1192,7 +1193,7 @@ protected:
 
     unsigned op() { return (m_opcode >> 20) & 0x1; }
     unsigned rt2() { return (m_opcode >> 16) & 0xf; }
-    unsigned rt() { return (m_opcode >> 16) & 0xf; }
+    unsigned rt() { return (m_opcode >> 12) & 0xf; }
     unsigned vm() { return (m_opcode & 0xf) | ((m_opcode >> 1) & 0x10); }
 };
 
@@ -1208,7 +1209,7 @@ protected:
 
     unsigned op() { return (m_opcode >> 20) & 0x1; }
     unsigned rt2() { return (m_opcode >> 16) & 0xf; }
-    unsigned rt() { return (m_opcode >> 16) & 0xf; }
+    unsigned rt() { return (m_opcode >> 12) & 0xf; }
     unsigned vm() { return ((m_opcode << 1) & 0x1e) | ((m_opcode >> 5) & 0x1); }
 };
 

@@ -1,3 +1,20 @@
+2018-04-19  Dominik Infuehr  <dinfuehr@igalia.com>
+
+        Add SetCallee as DFG-Operation
+        https://bugs.webkit.org/show_bug.cgi?id=184582
+
+        Reviewed by NOBODY (OOPS!).
+
+        Added test that runs into infinite loop without updating the callee and
+        therefore emitting SetCallee in DFG for recursive tail calls.
+
+        * stress/closure-recursive-tail-call-infinite-loop.js: Added.
+        (Foo):
+        (second):
+        (first):
+        (return.closure):
+        (createClosure):
+
 2018-04-18  Yusuke Suzuki  <utatane.tea@gmail.com>
 
         [WebAssembly][Modules] Import tables in wasm modules

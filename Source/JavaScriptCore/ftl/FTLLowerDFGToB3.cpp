@@ -924,6 +924,9 @@ private:
         case GetCallee:
             compileGetCallee();
             break;
+        case SetCallee:
+            compileSetCallee();
+            break;
         case GetArgumentCountIncludingThis:
             compileGetArgumentCountIncludingThis();
             break;
@@ -6633,6 +6636,12 @@ private:
     void compileGetCallee()
     {
         setJSValue(m_out.loadPtr(addressFor(CallFrameSlot::callee)));
+    }
+
+    void compileSetCallee()
+    {
+        auto callee = lowCell(m_node->child1());
+        m_out.storePtr(callee, payloadFor(CallFrameSlot::callee));
     }
     
     void compileGetArgumentCountIncludingThis()

@@ -1,3 +1,35 @@
+2018-04-20  Dominik Infuehr  <dinfuehr@igalia.com>
+
+        [ARM, MIPS] Enable pointer poisoning also for 32-bit architectures
+        https://bugs.webkit.org/show_bug.cgi?id=183407
+
+        Reviewed by NOBODY (OOPS!).
+
+        Extends offlineasm to support LabelReferences, which are needed to
+        access global variables. Pointer poisoning needs to access
+        poison values for unpoisoning.
+
+        LLInt is extended to unpoison poisoned pointer values. This was also
+        necessary for thunks, baseline-JIT and DFG-JIT.
+
+        Poison value is just a 32-bit random number with the two least significant
+        bit not set.
+
+        * dfg/DFGSpeculativeJIT.cpp:
+        (JSC::DFG::SpeculativeJIT::emitSwitchIntJump):
+        * jit/JITOpcodes32_64.cpp:
+        (JSC::JIT::emit_op_create_this):
+        * jit/ThunkGenerators.cpp:
+        (JSC::virtualThunkFor):
+        (JSC::nativeForGenerator):
+        (JSC::boundThisNoArgsFunctionCallGenerator):
+        * llint/LowLevelInterpreter.asm:
+        * llint/LowLevelInterpreter32_64.asm:
+        * offlineasm/arm.rb:
+        * offlineasm/asm.rb:
+        * offlineasm/instructions.rb:
+        * offlineasm/mips.rb:
+
 2018-04-19  Tadeu Zagallo  <tzagallo@apple.com>
 
         REGRESSION(r227340): ArrayBuffers were not being serialized when sent via MessagePorts

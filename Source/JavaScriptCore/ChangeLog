@@ -1,3 +1,15 @@
+2018-05-08  Dominik Infuehr  <dinfuehr@igalia.com>
+
+        [MIPS] Collect callee-saved register using inline assembly
+        https://bugs.webkit.org/show_bug.cgi?id=185428
+
+        Reviewed by NOBODY (OOPS!).
+
+        MIPS used setjmp instead of collecting registers with inline assembly like
+        other architectures.
+
+        * heap/RegisterState.h:
+
 2018-05-07  Daniel Bates  <dabates@apple.com>
 
         Check X-Frame-Options and CSP frame-ancestors in network process

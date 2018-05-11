@@ -1838,7 +1838,6 @@ private:
             break;
 
         case MapHash: {
-#if USE(JSVALUE64)
             if (node->child1()->shouldSpeculateBoolean()) {
                 fixEdge<BooleanUse>(node->child1());
                 break;
@@ -1870,9 +1869,6 @@ private:
             }
 
             fixEdge<UntypedUse>(node->child1());
-#else
-            fixEdge<UntypedUse>(node->child1());
-#endif // USE(JSVALUE64)
             break;
         }
 

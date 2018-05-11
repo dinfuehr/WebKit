@@ -3577,16 +3577,7 @@ void SpeculativeJIT::compile(Node* node)
     }
 
     case MapHash: {
-        JSValueOperand input(this, node->child1());
-
-        JSValueRegs inputRegs = input.jsValueRegs();
-
-        flushRegisters();
-        GPRFlushedCallResult result(this);
-        GPRReg resultGPR = result.gpr();
-        callOperation(operationMapHash, resultGPR, inputRegs);
-        m_jit.exceptionCheck();
-        int32Result(resultGPR, node);
+        compileMapHash(node);
         break;
     }
 

@@ -1274,6 +1274,7 @@ public:
     void compileCallDOM(Node*);
     void compileCheckSubClass(Node*);
     void compileNormalizeMapKey(Node*);
+    void compileMapHash(Node*);
     void compileGetMapBucketHead(Node*);
     void compileGetMapBucketNext(Node*);
     void compileSetAdd(Node*);

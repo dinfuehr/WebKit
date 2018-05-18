@@ -1,3 +1,15 @@
+2018-05-18  Dominik Infuehr  <dinfuehr@igalia.com>
+
+        Do not assume build directory resides in source directory
+        https://bugs.webkit.org/show_bug.cgi?id=185766
+
+        Reviewed by NOBODY (OOPS!).
+
+        * Scripts/run-jsc-stress-tests:
+
+        WEBKIT_PATH points to the source directory, the regex therefore doesn't match if the build
+        directory doesn't reside in the source directory.
+
 2018-05-18  Antoine Quint  <graouts@apple.com>
 
         [Web Animations] Turn Web Animations with CSS integration on for test runners

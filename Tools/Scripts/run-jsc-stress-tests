@@ -1643,7 +1643,7 @@ def prepareBundle
                     dependencies = `ldd #{source}`
                     dependencies.split(/\n/).each {
                         | dependency |
-                        FileUtils.cp_r $&, $jscPath.dirname if dependency =~ /#{WEBKIT_PATH}[^ ]*/
+                        FileUtils.cp_r $&, $jscPath.dirname if dependency =~ /#{originalJSCPath.dirname.dirname}[^ ]*/
                     }
                 rescue
                     $stderr.puts "Warning: unable to determine or copy library dependnecies of JSC."

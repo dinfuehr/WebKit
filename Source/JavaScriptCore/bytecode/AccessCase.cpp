@@ -680,7 +680,7 @@ void AccessCase::generateImpl(AccessGenerationState& state)
     switch (m_type) {
     case InHit:
     case InMiss:
-        jit.boxBooleanPayload(m_type == InHit, valueRegs.payloadGPR());
+        jit.boxBoolean(m_type == InHit, valueRegs);
         state.succeed();
         return;
 

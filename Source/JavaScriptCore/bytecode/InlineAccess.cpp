@@ -287,7 +287,7 @@ bool InlineAccess::generateSelfInAccess(StructureStubInfo& stubInfo, Structure* 
         MacroAssembler::NotEqual,
         MacroAssembler::Address(base, JSCell::structureIDOffset()),
         MacroAssembler::TrustedImm32(bitwise_cast<uint32_t>(structure->id())));
-    jit.boxBooleanPayload(true, value.payloadGPR());
+    jit.boxBoolean(true, value);
 
     bool linkedCodeInline = linkCodeInline("in access", jit, stubInfo, [&] (LinkBuffer& linkBuffer) {
         linkBuffer.link(branchToSlowPath, stubInfo.slowPathStartLocation());

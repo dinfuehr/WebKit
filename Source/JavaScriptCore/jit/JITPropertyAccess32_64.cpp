@@ -797,11 +797,11 @@ void JIT::emitSlow_op_in_by_id(Instruction* currentInstruction, Vector<SlowCaseE
     int resultVReg = currentInstruction[1].u.operand;
     const Identifier* ident = &(m_codeBlock->identifier(currentInstruction[3].u.operand));
 
-    JITInByIdGenerator& gen = m_inByIds[m_getByIdIndex++];
+    JITInByIdGenerator& gen = m_inByIds[m_inByIdIndex++];
 
     Label coldPathBegin = label();
 
-    Call call = callOperationWithProfile(operationInByIdOptimize, resultVReg, gen.stubInfo(), JSValueRegs(regT1, regT0), ident->impl());
+    Call call = callOperation(operationInByIdOptimize, resultVReg, gen.stubInfo(), JSValueRegs(regT1, regT0), ident->impl());
 
     gen.reportSlowPathCall(coldPathBegin, call);
 }

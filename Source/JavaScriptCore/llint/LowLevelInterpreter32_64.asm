@@ -23,9 +23,34 @@
 
 
 # Utilities
-macro dispatch(advance)
-    addp advance * 4, PC
-    jmp [PC]
+macro nextInstruction()
+    loadb [PC], t0
+    leap _g_opcodeMap, t1
+    loadp [t1, t0, 4], t2
+    jmp t2, BytecodePtrTag
+end
+
+macro nextInstructionWide()
+    loadi 1[PC], t0
+    leap _g_opcodeMapWide, t1
+    loadp [t1, t0, 4], t2
+    jmp t2, BytecodePtrTag
+end
+
+macro getuOperandNarrow(op, field, dst)
+    loadb constexpr %op%_%field%_index[PC], dst
+end
+
+macro getOperandNarrow(op, field, dst)
+    loadbsp constexpr %op%_%field%_index[PC], dst
+end
+
+macro getuOperandWide(op, field, dst)
+    loadi constexpr %op%_%field%_index * 4 + 1[PC], dst
+end
+
+macro getOperandWide(op, field, dst)
+    loadis constexpr %op%_%field%_index * 4 + 1[PC], dst
 end
 
 macro dispatchBranchWithOffset(pcOffset)
@@ -645,6 +670,16 @@ macro branchIfException(label)
 end
 
 
+macro getMetadata(opcodeID, metadataSize, offset, dst, scratch)
+    getOperand(offset, dst) # metadataID
+    loadp CodeBlock[cfr], scratch # CodeBlock
+    loadp CodeBlock::m_metadata[scratch], scratch # CodeBlock->m_metadata
+    leap MetadataTable::m_data[scratch], scratch
+    loadp opcodeID * 4[scratch], scratch # Array<Op::Metadata>
+    muli metadataSize, dst # offset = sizeof(Op::Metadata) * metadataID
+    leap [dst, scratch], dst # Array<Op::Metadata>[offset]
+end
+
 # Instruction implementations
 
 _llint_op_enter:
@@ -709,11 +744,12 @@ _llint_op_get_scope:
 
 _llint_op_to_this:
     traceExecution()
-    loadi 4[PC], t0
+    getOperand(1, t0)
     bineq TagOffset[cfr, t0, 8], CellTag, .opToThisSlow
     loadi PayloadOffset[cfr, t0, 8], t0
     bbneq JSCell::m_type[t0], FinalObjectType, .opToThisSlow
-    loadpFromInstruction(2, t2)
+    getMetadata(constexpr op_to_this, sizeof OpToThis::Metadata, 2, t2, t3)
+    loadp OpToThis::Metadata::cachedStructure[t2], t2
     bpneq JSCell::m_structureID[t0], t2, .opToThisSlow
     dispatch(constexpr op_to_this_length)
 
@@ -2652,35 +2688,34 @@ _llint_op_profile_type:
     dispatch(6)
 
 
-_llint_op_profile_control_flow:
+llintOp(op_profile_control_flow, OpProfileControlFlow, macro (size, get, dispatch)
     traceExecution()
-    loadpFromInstruction(1, t0)
+    # TODO: this should read from metadata instead
+    get(textOffset, t0)
     loadi BasicBlockLocation::m_executionCount[t0], t1
     addi 1, t1
     bieq t1, 0, .done # We overflowed.
     storei t1, BasicBlockLocation::m_executionCount[t0]
 .done:
-    dispatch(2)
+    dispatch()
+end)
 
 
-_llint_op_get_rest_length:
-    traceExecution()
+llintOpWithReturn(op_get_rest_length, macro (size, get, dispatch, return)
     loadi PayloadOffset + ArgumentCount[cfr], t0
     subi 1, t0
-    loadisFromInstruction(2, t1)
+    get(numParametersToSkip, t1)
     bilteq t0, t1, .storeZero
     subi t1, t0
     jmp .finish
 .storeZero:
     move 0, t0
 .finish:
-    loadisFromInstruction(1, t1)
-    storei t0, PayloadOffset[cfr, t1, 8]
-    storei Int32Tag, TagOffset[cfr, t1, 8]
-    dispatch(3)
+    return(Int32Tag, t0)
+end)
 
 
-_llint_op_log_shadow_chicken_prologue:
+llintOp(op_log_shadow_chicken_prologue, macro (size, get, dispatch)
     traceExecution()
     acquireShadowChickenPacket(.opLogShadowChickenPrologueSlow)
     storep cfr, ShadowChicken::Packet::frame[t0]
@@ -2691,27 +2726,28 @@ _llint_op_log_shadow_chicken_prologue:
     loadisFromInstruction(1, t1)
     loadi PayloadOffset[cfr, t1, 8], t1
     storep t1, ShadowChicken::Packet::scope[t0]
-    dispatch(2)
+    dispatch()
 .opLogShadowChickenPrologueSlow:
     callSlowPath(_llint_slow_path_log_shadow_chicken_prologue)
-    dispatch(2)
+    dispatch()
+end)
 
 
-_llint_op_log_shadow_chicken_tail:
-    traceExecution()
+llintOp(op_log_shadow_chicken_tail, OpLogShadowChickenTail, macro (size, get, dispatch)
     acquireShadowChickenPacket(.opLogShadowChickenTailSlow)
     storep cfr, ShadowChicken::Packet::frame[t0]
     storep ShadowChickenTailMarker, ShadowChicken::Packet::callee[t0]
-    loadVariable(1, t3, t2, t1)
+    loadVariable(get, thisValue, t2, t1)
     storei t2, TagOffset + ShadowChicken::Packet::thisValue[t0]
     storei t1, PayloadOffset + ShadowChicken::Packet::thisValue[t0]
-    loadisFromInstruction(2, t1)
+    get(scope, t1)
     loadi PayloadOffset[cfr, t1, 8], t1
     storep t1, ShadowChicken::Packet::scope[t0]
     loadp CodeBlock[cfr], t1
     storep t1, ShadowChicken::Packet::codeBlock[t0]
     storei PC, ShadowChicken::Packet::callSiteIndex[t0]
-    dispatch(3)
+    dispatch()
 .opLogShadowChickenTailSlow:
     callSlowPath(_llint_slow_path_log_shadow_chicken_tail)
-    dispatch(3)
+    dispatch()
+end)

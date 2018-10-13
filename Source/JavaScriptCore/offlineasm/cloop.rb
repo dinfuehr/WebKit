@@ -222,7 +222,7 @@ class Address
         "*CAST<NativeFunction*>(#{pointerExpr})"
     end
     def opcodeMemRef
-        "*CAST<Opcode*>(#{pointerExpr})"
+        "*CAST<OpcodeID*>(#{pointerExpr})"
     end
     def dblMemRef
         "*CAST<double*>(#{pointerExpr})"
@@ -286,7 +286,7 @@ class BaseIndex
         "*CAST<uintptr_t*>(#{pointerExpr})"
     end
     def opcodeMemRef
-        "*CAST<Opcode*>(#{pointerExpr})"
+        "*CAST<OpcodeID*>(#{pointerExpr})"
     end
     def dblMemRef
         "*CAST<double*>(#{pointerExpr})"
@@ -612,7 +612,7 @@ class Instruction
             $asm.putc "#{operands[1].intMemRef} = #{operands[0].clValue(:int)};"
         when "loadb"
             $asm.putc "#{operands[1].clValue(:int)} = #{operands[0].uint8MemRef};"
-        when "loadbs"
+        when "loadbsp"
             $asm.putc "#{operands[1].clValue(:int)} = #{operands[0].int8MemRef};"
         when "storeb"
             $asm.putc "#{operands[1].uint8MemRef} = #{operands[0].clValue(:int8)};"
@@ -1077,7 +1077,7 @@ class Instruction
         # as an opcode dispatch.
         when "cloopCallJSFunction"
             uid = $asm.newUID
-            $asm.putc "lr.opcode = getOpcode(llint_cloop_did_return_from_js_#{uid});"
+            $asm.putc "lr.opcode = llint_cloop_did_return_from_js_#{uid};"
             $asm.putc "opcode = #{operands[0].clValue(:opcode)};"
             $asm.putc "DISPATCH_OPCODE();"
             $asm.putsLabel("llint_cloop_did_return_from_js_#{uid}", false)

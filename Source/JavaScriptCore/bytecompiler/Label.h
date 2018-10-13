@@ -34,24 +34,38 @@
 #include <limits.h>
 
 namespace JSC {
-
     class BytecodeGenerator;
 
     class Label {
     WTF_MAKE_NONCOPYABLE(Label);
     public:
+        class Bound {
+
+        };
+
         Label() = default;
+
+        Label(unsigned location)
+            : m_location(location)
+        { }
 
         void setLocation(BytecodeGenerator&, unsigned);
 
-        int bind(int opcode, int offset) const
+        int bind(BytecodeGenerator*);
+
+        int bind(unsigned offset)
         {
             m_bound = true;
-            if (m_location == invalidLocation) {
-                m_unresolvedJumps.append(std::make_pair(opcode, offset));
-                return 0;
-            }
-            return m_location - opcode;
+            if (!isForward())
+                return m_location - offset;
+            m_unresolvedJumps.append(offset);
+            return 0;
+        }
+
+        int bind()
+        {
+            ASSERT(!isForward());
+            return bind(0u);
         }
 
         void ref() { ++m_refCount; }
@@ -65,16 +79,10 @@ namespace JSC {
 
         bool isForward() const { return m_location == invalidLocation; }
         
-        int bind()
-        {
-            ASSERT(!isForward());
-            return bind(0, 0);
-        }
-
         bool isBound() const { return m_bound; }
 
     private:
-        typedef Vector<std::pair<int, int>, 8> JumpVector;
+        typedef Vector<int, 8> JumpVector;
 
         static const unsigned invalidLocation = UINT_MAX;
 

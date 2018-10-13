@@ -947,6 +947,8 @@ class Instruction
             handleX86Op("xor#{x86Suffix(:ptr)}", :ptr)
         when "xorq"
             handleX86Op("xor#{x86Suffix(:quad)}", :quad)
+        when "leap"
+            emitX86Lea(operands[0], operands[1], :ptr)
         when "loadi"
             $asm.puts "mov#{x86Suffix(:int)} #{x86LoadOperands(:int, :int)}"
         when "storei"
@@ -980,6 +982,12 @@ class Instruction
                 $asm.puts "movsbl #{x86LoadOperands(:byte, :int)}"
             else
                 $asm.puts "movsx #{x86LoadOperands(:byte, :int)}"
+            end
+        when "loadbsp"
+            if !isIntelSyntax
+                $asm.puts "movsb#{x86Suffix(:ptr)} #{x86LoadOperands(:byte, :ptr)}"
+            else
+                $asm.puts "movsx #{x86LoadOperands(:byte, :ptr)}"
             end
         when "loadh"
             if !isIntelSyntax

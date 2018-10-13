@@ -73,6 +73,18 @@ class Node
     def filter(type)
         flatten.select{|v| v.is_a? type}
     end
+
+    def empty?
+        false
+    end
+
+    def to_json(options={})
+        hash = {}
+        self.instance_variables.each do |var|
+            hash[var] = self.instance_variable_get var
+        end
+        hash.to_json(options)
+    end
 end
 
 class NoChildren < Node
@@ -915,7 +927,7 @@ class Instruction < Node
     end
     
     def children
-        operands
+        @operands
     end
     
     def mapChildren(&proc)
@@ -966,7 +978,7 @@ class Error < NoChildren
 end
 
 class ConstExpr < NoChildren
-    attr_reader :variable, :value
+    attr_reader :value
 
     def initialize(codeOrigin, value)
         super(codeOrigin)
@@ -1021,11 +1033,10 @@ $labelMapping = {}
 $referencedExternLabels = Array.new
 
 class Label < NoChildren
-    attr_reader :name
-    
-    def initialize(codeOrigin, name)
+    def initialize(codeOrigin, name, definedInFile = false)
         super(codeOrigin)
         @name = name
+        @definedInFile = definedInFile
         @extern = true
         @global = false
     end
@@ -1034,7 +1045,7 @@ class Label < NoChildren
         if $labelMapping[name]
             raise "Label name collision: #{name}" unless $labelMapping[name].is_a? Label
         else
-            $labelMapping[name] = Label.new(codeOrigin, name)
+            $labelMapping[name] = Label.new(codeOrigin, name, definedInFile)
         end
         if definedInFile
             $labelMapping[name].clearExtern()
@@ -1079,6 +1090,10 @@ class Label < NoChildren
 
     def global?
         @global
+    end
+
+    def name
+        @name
     end
 
     def dump
@@ -1255,6 +1270,10 @@ class Sequence < Node
     def dump
         list.collect{|v| v.dump}.join("\n")
     end
+
+    def empty?
+        list.all?(&:empty?)
+    end
 end
 
 class True < NoChildren
@@ -1404,6 +1423,10 @@ class Skip < NoChildren
     def dump
         "\tskip"
     end
+
+    def empty?
+        true
+    end
 end
 
 class IfThenElse < Node
@@ -1426,11 +1449,17 @@ class IfThenElse < Node
     end
     
     def mapChildren
-        IfThenElse.new(codeOrigin, (yield @predicate), (yield @thenCase), (yield @elseCase))
+        ifThenElse = IfThenElse.new(codeOrigin, (yield @predicate), (yield @thenCase))
+        ifThenElse.elseCase = yield @elseCase
+        ifThenElse
     end
     
     def dump
         "if #{predicate.dump}\n" + thenCase.dump + "\nelse\n" + elseCase.dump + "\nend"
+    end
+
+    def empty?
+        @thenCase.empty? && @elseCase.empty?
     end
 end
 

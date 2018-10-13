@@ -42,13 +42,16 @@ typedef void (*LLIntCode)();
 
 namespace LLInt {
 
+extern "C" JS_EXPORT_PRIVATE Opcode g_opcodeMap[numOpcodeIDs];
+extern "C" JS_EXPORT_PRIVATE Opcode g_opcodeMapWide[numOpcodeIDs];
+
 class Data {
+
 public:
     static void performAssertions(VM&);
 
 private:
-    static Instruction s_exceptionInstructions[maxOpcodeLength + 1];
-    static Opcode s_opcodeMap[numOpcodeIDs];
+    static uint8_t s_exceptionInstructions[maxOpcodeLength + 1];
 
     friend void initialize();
 
@@ -56,6 +59,7 @@ private:
     friend Opcode* opcodeMap();
     friend Opcode getOpcode(OpcodeID);
     template<PtrTag tag> friend MacroAssemblerCodePtr<tag> getCodePtr(OpcodeID);
+    template<PtrTag tag> friend MacroAssemblerCodePtr<tag> getWideCodePtr(OpcodeID);
     template<PtrTag tag> friend MacroAssemblerCodeRef<tag> getCodeRef(OpcodeID);
 };
 
@@ -63,18 +67,18 @@ void initialize();
 
 inline Instruction* exceptionInstructions()
 {
-    return Data::s_exceptionInstructions;
+    return reinterpret_cast<Instruction*>(Data::s_exceptionInstructions);
 }
     
 inline Opcode* opcodeMap()
 {
-    return Data::s_opcodeMap;
+    return g_opcodeMap;
 }
 
 inline Opcode getOpcode(OpcodeID id)
 {
 #if ENABLE(COMPUTED_GOTO_OPCODES)
-    return Data::s_opcodeMap[id];
+    return g_opcodeMap[id];
 #else
     return static_cast<Opcode>(id);
 #endif
@@ -83,9 +87,13 @@ inline Opcode getOpcode(OpcodeID id)
 template<PtrTag tag>
 ALWAYS_INLINE MacroAssemblerCodePtr<tag> getCodePtr(OpcodeID opcodeID)
 {
-    void* address = reinterpret_cast<void*>(getOpcode(opcodeID));
-    address = retagCodePtr<BytecodePtrTag, tag>(address);
-    return MacroAssemblerCodePtr<tag>::createFromExecutableAddress(address);
+    return MacroAssemblerCodePtr<tag>::createFromExecutableAddress(g_opcodeMap[opcodeID]);
+}
+
+template<PtrTag tag>
+ALWAYS_INLINE MacroAssemblerCodePtr<tag> getWideCodePtr(OpcodeID opcodeID)
+{
+    return MacroAssemblerCodePtr<tag>::createFromExecutableAddress(g_opcodeMapWide[opcodeID]);
 }
 
 template<PtrTag tag>
@@ -109,7 +117,7 @@ ALWAYS_INLINE LLIntCode getCodeFunctionPtr(OpcodeID opcodeID)
 #else
 ALWAYS_INLINE void* getCodePtr(OpcodeID id)
 {
-    return reinterpret_cast<void*>(getOpcode(id));
+    return g_opcodeMap[id];
 }
 #endif
 

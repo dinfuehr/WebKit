@@ -34,11 +34,11 @@ namespace JSC {
 // 'extern "C"') needs to be POD; hence putting any constructors into it could cause either compiler
 // warnings, or worse, a change in the ABI used to return these types.
 struct SlowPathReturnType {
-    void* a;
-    void* b;
+    const void* a;
+    const void* b;
 };
 
-inline SlowPathReturnType encodeResult(void* a, void* b)
+inline SlowPathReturnType encodeResult(const void* a, const void* b)
 {
     SlowPathReturnType result;
     result.a = a;
@@ -46,7 +46,7 @@ inline SlowPathReturnType encodeResult(void* a, void* b)
     return result;
 }
 
-inline void decodeResult(SlowPathReturnType result, void*& a, void*& b)
+inline void decodeResult(SlowPathReturnType result, const void*& a, const void*& b)
 {
     a = result.a;
     b = result.b;
@@ -57,13 +57,13 @@ typedef int64_t SlowPathReturnType;
 
 typedef union {
     struct {
-        void* a;
-        void* b;
+        const void* a;
+        const void* b;
     } pair;
     int64_t i;
 } SlowPathReturnTypeEncoding;
 
-inline SlowPathReturnType encodeResult(void* a, void* b)
+inline SlowPathReturnType encodeResult(const void* a, const void* b)
 {
     SlowPathReturnTypeEncoding u;
     u.pair.a = a;
@@ -71,7 +71,7 @@ inline SlowPathReturnType encodeResult(void* a, void* b)
     return u.i;
 }
 
-inline void decodeResult(SlowPathReturnType result, void*& a, void*& b)
+inline void decodeResult(SlowPathReturnType result, const void*& a, const void*& b)
 {
     SlowPathReturnTypeEncoding u;
     u.i = result;

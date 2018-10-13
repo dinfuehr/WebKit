@@ -174,6 +174,12 @@ namespace JSC {
 
         Type bits() const { return m_bits; }
 
+        void dump(PrintStream& out) const
+        {
+            // TODO: more meaningful information
+            out.print(bits());
+        }
+
     private:
         Type m_bits;
     };
@@ -197,12 +203,12 @@ namespace JSC {
             int i;
         } m_u;
 
-        ResultType first()
+        ResultType first() const
         {
             return ResultType(m_u.rds.first);
         }
 
-        ResultType second()
+        ResultType second() const
         {
             return ResultType(m_u.rds.second);
         }
@@ -216,6 +222,11 @@ namespace JSC {
             OperandTypes types;
             types.m_u.i = value;
             return types;
+        }
+
+        void dump(PrintStream& out) const
+        {
+            out.print("OperandTypes(", first(),  ", ", second(), ")");
         }
     };
 

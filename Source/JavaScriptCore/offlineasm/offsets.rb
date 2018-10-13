@@ -181,6 +181,28 @@ def offsetsAndConfigurationIndex(file)
     }
 end
 
+def configurationIndices(file)
+    fileBytes = fileBytes(file)
+    result = []
+
+    [:little, :big].each {
+        | endianness |
+        headerMagicBytes = prepareMagic(endianness, OFFSET_HEADER_MAGIC_NUMBERS)
+
+        bigArray = sliceByteArrays(fileBytes, headerMagicBytes)
+        unless bigArray.size <= 1
+            bigArray[1..-1].each {
+                | configArray |
+                result << readInt(endianness, configArray)
+            }
+        end
+    }
+
+    raise MissingMagicValuesException unless result.length >= 1
+
+    return result
+end
+
 #
 # configurationIndices(ast, file) ->
 #     [[offsets, index], ...]

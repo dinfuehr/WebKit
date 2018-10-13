@@ -108,13 +108,20 @@ using namespace JSC::LLInt;
 
 #define OFFLINE_ASM_GLOBAL_LABEL(label)  label: USE_LABEL(label);
 
+#if ENABLE(LABEL_TRACING)
+#define TRACE_LABEL(prefix, label) dataLog(#prefix, ": ", #label, "\n")
+#else
+#define TRACE_LABEL(prefix, label) do { } while (false);
+#endif
+
+
 #if ENABLE(COMPUTED_GOTO_OPCODES)
-#define OFFLINE_ASM_GLUE_LABEL(label)  label: USE_LABEL(label);
+#define OFFLINE_ASM_GLUE_LABEL(label) label: TRACE_LABEL("OFFLINE_ASM_GLUE_LABEL", label); USE_LABEL(label);
 #else
 #define OFFLINE_ASM_GLUE_LABEL(label)  case label: label: USE_LABEL(label);
 #endif
 
-#define OFFLINE_ASM_LOCAL_LABEL(label) label: USE_LABEL(label);
+#define OFFLINE_ASM_LOCAL_LABEL(label) label: TRACE_LABEL("OFFLINE_ASM_LOCAL_LABEL", #label); USE_LABEL(label);
 
 
 //============================================================================
@@ -238,7 +245,7 @@ struct CLoopRegister {
         EncodedJSValue encodedJSValue;
         double castToDouble;
 #endif
-        Opcode opcode;
+        OpcodeID opcode;
     };
 
     operator ExecState*() { return execState; }
@@ -288,8 +295,8 @@ JSValue CLoop::execute(OpcodeID entryOpcodeID, void* executableAddress, VM* vm, 
         // can depend on the opcodeMap.
         Instruction* exceptionInstructions = LLInt::exceptionInstructions();
         for (int i = 0; i < maxOpcodeLength + 1; ++i)
-            exceptionInstructions[i].u.pointer =
-                LLInt::getCodePtr(llint_throw_from_slow_path_trampoline);
+            exceptionInstructions[i].u.unsignedValue =
+                llint_throw_from_slow_path_trampoline;
 
         return JSValue();
     }
@@ -353,7 +360,7 @@ JSValue CLoop::execute(OpcodeID entryOpcodeID, void* executableAddress, VM* vm, 
     CLoopStack& cloopStack = vm->interpreter->cloopStack();
     StackPointerScope stackPointerScope(cloopStack);
 
-    lr.opcode = getOpcode(llint_return_to_host);
+    lr.opcode = llint_return_to_host;
     sp.vp = cloopStack.currentStackPointer();
     cfr.callFrame = vm->topCallFrame;
 #ifndef NDEBUG
@@ -376,7 +383,7 @@ JSValue CLoop::execute(OpcodeID entryOpcodeID, void* executableAddress, VM* vm, 
     // Interpreter variables for value passing between opcodes and/or helpers:
     NativeFunction nativeFunc = nullptr;
     JSValue functionReturnValue;
-    Opcode opcode = getOpcode(entryOpcodeID);
+    OpcodeID opcode = entryOpcodeID;
 
 #define PUSH(cloopReg) \
     do { \
@@ -399,7 +406,7 @@ JSValue CLoop::execute(OpcodeID entryOpcodeID, void* executableAddress, VM* vm, 
 #if USE(JSVALUE32_64)
 #define FETCH_OPCODE() pc.opcode
 #else // USE(JSVALUE64)
-#define FETCH_OPCODE() *bitwise_cast<Opcode*>(pcBase.i8p + pc.i * 8)
+#define FETCH_OPCODE() *bitwise_cast<OpcodeID*>(pcBase.i8p + pc.i * 8)
 #endif // USE(JSVALUE64)
 
 #define NEXT_INSTRUCTION() \
@@ -413,7 +420,7 @@ JSValue CLoop::execute(OpcodeID entryOpcodeID, void* executableAddress, VM* vm, 
     //========================================================================
     // Loop dispatch mechanism using computed goto statements:
 
-    #define DISPATCH_OPCODE() goto *opcode
+    #define DISPATCH_OPCODE() goto *getOpcode(opcode);
 
     #define DEFINE_OPCODE(__opcode) \
         __opcode: \

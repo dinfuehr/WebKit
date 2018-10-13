@@ -40,6 +40,8 @@ inputFlnm = ARGV.shift
 settingsFlnm = ARGV.shift
 outputFlnm = ARGV.shift
 
+$stderr.puts settingsFlnm
+
 validBackends = canonicalizeBackendNames(ARGV.shift.split(/[,\s]+/))
 includeOnlyBackends(validBackends)
 
@@ -85,6 +87,7 @@ File.open(outputFlnm, "w") {
         forSettings(settingsCombinations[configIndex], ast) {
             | concreteSettings, lowLevelAST, backend |
 
+            lowLevelAST = lowLevelAST.demacroify({}, {})
             offsetsList = offsetsList(lowLevelAST)
             sizesList = sizesList(lowLevelAST)
             constsList = constsList(lowLevelAST)

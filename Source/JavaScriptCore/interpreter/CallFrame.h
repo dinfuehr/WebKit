@@ -53,7 +53,7 @@ namespace JSC  {
             : m_bits(bits)
         { }
 #if USE(JSVALUE32_64)
-        explicit CallSiteIndex(Instruction* instruction)
+        explicit CallSiteIndex(const Instruction* instruction)
             : m_bits(bitwise_cast<uint32_t>(instruction))
         { }
 #endif
@@ -69,7 +69,7 @@ namespace JSC  {
 
     struct CallerFrameAndPC {
         CallFrame* callerFrame;
-        Instruction* pc;
+        const Instruction* pc;
         static const int sizeInRegisters = 2 * sizeof(void*) / sizeof(Register);
     };
     static_assert(CallerFrameAndPC::sizeInRegisters == sizeof(CallerFrameAndPC) / sizeof(Register), "CallerFrameAndPC::sizeInRegisters is incorrect.");
@@ -182,8 +182,8 @@ namespace JSC  {
             return topOfFrameInternal();
         }
     
-        Instruction* currentVPC() const; // This only makes sense in the LLInt and baseline.
-        void setCurrentVPC(Instruction* vpc);
+        const Instruction* currentVPC() const; // This only makes sense in the LLInt and baseline.
+        void setCurrentVPC(const Instruction*);
 
         void setCallerFrame(CallFrame* frame) { callerFrameAndPC().callerFrame = frame; }
         void setScope(int scopeRegisterOffset, JSScope* scope) { static_cast<Register*>(this)[scopeRegisterOffset] = scope; }
@@ -263,7 +263,7 @@ namespace JSC  {
         void setArgumentCountIncludingThis(int count) { static_cast<Register*>(this)[CallFrameSlot::argumentCount].payload() = count; }
         void setCallee(JSObject* callee) { static_cast<Register*>(this)[CallFrameSlot::callee] = callee; }
         void setCodeBlock(CodeBlock* codeBlock) { static_cast<Register*>(this)[CallFrameSlot::codeBlock] = codeBlock; }
-        void setReturnPC(void* value) { callerFrameAndPC().pc = reinterpret_cast<Instruction*>(value); }
+        void setReturnPC(void* value) { callerFrameAndPC().pc = reinterpret_cast<const Instruction*>(value); }
 
         String friendlyFunctionName();
 

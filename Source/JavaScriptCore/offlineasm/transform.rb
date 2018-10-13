@@ -112,17 +112,24 @@ end
 #
 
 class Node
-    def demacroify(macros)
+    def demacroify(constants, macros)
         mapChildren {
             | child |
-            child.demacroify(macros)
+            child.demacroify(constants, macros)
         }
     end
-    
-    def substitute(mapping)
+
+    def freshVariables(mapping)
         mapChildren {
             | child |
-            child.substitute(mapping)
+            child.freshVariables(mapping)
+        }
+    end
+
+    def substitute(mapping, preserveConstDecls)
+        mapChildren {
+            | child |
+            child.substitute(mapping, preserveConstDecls)
         }
     end
     
@@ -136,19 +143,19 @@ end
 
 $uniqueMacroVarID = 0
 class Macro
-    def capture
-        mapping = {}
+    def freshVariables(mapping = {})
+        myMapping = mapping.dup
         newVars = []
         variables.each do |var|
             $uniqueMacroVarID += 1
             newVar = Variable.forName(var.codeOrigin, "_var#{$uniqueMacroVarID}", var.originalName)
             newVars << newVar
-            mapping[var] = newVar
+            myMapping[var] = newVar
         end
-        Macro.new(codeOrigin, name, newVars, body.substitute(mapping))
+        Macro.new(codeOrigin, name, newVars, body.freshVariables(myMapping))
     end
 
-    def substitute(mapping)
+    def substitute(mapping, preserveConstDecls)
         myMapping = {}
         mapping.each_pair {
             | key, value |
@@ -158,26 +165,176 @@ class Macro
         }
         mapChildren {
             | child |
-            child.substitute(myMapping)
+            child.substitute(myMapping, preserveConstDecls)
         }
     end
 end
 
 class MacroCall
-    def substitute(mapping)
-        newName = Variable.forName(codeOrigin, name)
+    def freshVariables(mapping)
+        newName = Variable.forName(codeOrigin, name, originalName)
         if mapping[newName]
             newName = mapping[newName]
         end
-        newOperands = operands.map { |operand| operand.substitute(mapping) }
+        newOperands = operands.map { |operand| operand.freshVariables(mapping) }
         MacroCall.new(codeOrigin, newName.name, newOperands, annotation, originalName)
     end
 end
 
+$concatenation = /%([a-zA-Z0-9_]+)%/
 class Variable
-    def substitute(mapping)
-        if mapping[self]
+    def freshVariables(mapping)
+        if @name =~ $concatenation
+            name = @name.gsub($concatenation) { |match|
+                var = Variable.forName(codeOrigin, match[1...-1])
+                if mapping[var]
+                    "%#{mapping[var].name}%"
+                else
+                    match
+                end
+            }
+            Variable.forName(codeOrigin, name)
+        elsif mapping[self]
             mapping[self]
+        else
+            self
+        end
+    end
+
+    def substitute(mapping, preserveConstDecls)
+        if @name =~ $concatenation
+            name = @name.gsub($concatenation) { |match|
+                var = Variable.forName(codeOrigin, match[1...-1])
+                raise "Unknown variable `#{var.originalName}` in substitution at #{codeOrigin} - #{mapping} " unless mapping[var]
+                mapping[var].name
+            }
+            Variable.forName(codeOrigin, name)
+        elsif mapping[self]
+            mapping[self]
+        else
+            self
+        end
+    end
+end
+
+class StructOffset
+    def freshVariables(mapping)
+        if dump =~ $concatenation
+            names = dump.gsub($concatenation) { |match|
+                var = Variable.forName(codeOrigin, match[1...-1])
+                if mapping[var]
+                    "%#{mapping[var].name}%"
+                else
+                    match
+                end
+            }.split('::')
+            StructOffset.forField(codeOrigin, names[0..-2].join('::'), names[-1])
+        else
+            self
+        end
+    end
+
+    def substitute(mapping, preserveConstDecls)
+        if dump =~ $concatenation
+            names = dump.gsub($concatenation) { |match|
+                var = Variable.forName(codeOrigin, match[1...-1])
+                raise "Unknown variable `#{var.originalName}` in substitution at #{codeOrigin}" unless mapping[var]
+                mapping[var].name
+            }.split('::')
+            StructOffset.forField(codeOrigin, names[0..-2].join('::'), names[-1])
+        else
+            self
+        end
+    end
+end
+
+class Label
+    def freshVariables(mapping)
+        if @name =~ $concatenation
+            name = @name.gsub($concatenation) { |match|
+                var = Variable.forName(codeOrigin, match[1...-1])
+                if mapping[var]
+                    "%#{mapping[var].name}%"
+                else
+                    match
+                end
+            }
+            Label.forName(codeOrigin, name, @definedInFile)
+        else
+            self
+        end
+    end
+
+    def substitute(mapping, preserveConstDecls)
+        if @name =~ $concatenation
+            name = @name.gsub($concatenation) { |match|
+                var = Variable.forName(codeOrigin, match[1...-1])
+                raise "Unknown variable `#{var.originalName}` in substitution at #{codeOrigin}" unless mapping[var]
+                mapping[var].name
+            }
+            Label.forName(codeOrigin, name, @definedInFile)
+        else
+            self
+        end
+    end
+end
+
+class ConstExpr
+    def freshVariables(mapping)
+        if @value =~ $concatenation
+            value = @value.gsub($concatenation) { |match|
+                var = Variable.forName(codeOrigin, match[1...-1])
+                if mapping[var]
+                    "%#{mapping[var].name}%"
+                else
+                    match
+                end
+            }
+            ConstExpr.forName(codeOrigin, value)
+        else
+            self
+        end
+    end
+
+    def substitute(mapping, preserveConstDecls)
+        if @value =~ $concatenation
+            value = @value.gsub($concatenation) { |match|
+                var = Variable.forName(codeOrigin, match[1...-1])
+                raise "Unknown variable `#{var.originalName}` in substitution at #{codeOrigin}" unless mapping[var]
+                mapping[var].name
+            }
+            ConstExpr.forName(codeOrigin, value)
+        else
+            self
+        end
+    end
+end
+
+class Sizeof
+    def freshVariables(mapping)
+        if struct =~ $concatenation
+            value = struct.gsub($concatenation) { |match|
+                var = Variable.forName(codeOrigin, match[1...-1])
+                if mapping[var]
+                    "%#{mapping[var].name}%"
+                else
+                    match
+                end
+            }
+            Sizeof.forName(codeOrigin, value)
+        else
+            self
+        end
+    end
+
+    def substitute(mapping, preserveConstDecls)
+        if struct =~ $concatenation
+            value = struct.gsub($concatenation) { |match|
+                var = Variable.forName(codeOrigin, match[1...-1])
+                raise "Unknown variable `#{var.originalName}` in substitution at #{codeOrigin}" unless mapping[var]
+                mapping[var].name
+            }
+            Sizeof.forName(codeOrigin, value)
         else
             self
         end
@@ -194,16 +351,26 @@ class LocalLabel
     end
 end
 
+class MacroError < RuntimeError
+    attr_reader :message
+    attr_reader :backtrace
+    def initialize(message, backtrace)
+        @message = message
+        @backtrace = backtrace
+    end
+end
+
 class Sequence
-    def substitute(constants)
+    def substitute(constants, preserveConstDecls = false)
         newList = []
         myConstants = constants.dup
         @list.each {
             | item |
             if item.is_a? ConstDecl
-                myConstants[item.variable] = item.value.substitute(myConstants)
+                myConstants[item.variable] = item.value.substitute(myConstants, preserveConstDecls)
+                newList << item if preserveConstDecls
             else
-                newList << item.substitute(myConstants)
+                newList << item.substitute(myConstants, preserveConstDecls)
             end
         }
         Sequence.new(codeOrigin, newList)
@@ -222,12 +389,20 @@ class Sequence
         substituteLabels(mapping)
     end
     
-    def demacroify(macros)
+    @@demacroifyStack = []
+    def macroError(msg)
+        backtrace = @@demacroifyStack.reverse.map { |macroCall|
+            "#{macroCall.codeOrigin} in call to #{macroCall.originalName}"
+        }
+        raise MacroError.new(msg, backtrace)
+    end
+    def demacroify(constants, macros)
         myMacros = macros.dup
+        myConstants = constants.dup
         @list.each {
             | item |
             if item.is_a? Macro
-                myMacros[item.name] = item.capture
+                myMacros[item.name] = item.freshVariables
             end
         }
         newList = []
@@ -235,30 +410,38 @@ class Sequence
             | item |
             if item.is_a? Macro
                 # Ignore.
+            elsif item.is_a? ConstDecl
+                myConstants[item.variable.name] = item.value
+                newList << item.demacroify(myConstants, myMacros)
             elsif item.is_a? MacroCall
+                @@demacroifyStack << item
                 mapping = {}
                 myMyMacros = myMacros.dup
-                raise "Could not find macro #{item.originalName} at #{item.codeOriginString}" unless myMacros[item.name]
-                raise "Argument count mismatch for call to #{item.originalName} at #{item.codeOriginString}" unless item.operands.size == myMacros[item.name].variables.size
+                targetMacroName = myConstants[item.name]
+                targetMacroName = targetMacroName ? targetMacroName.dump : item.name
+                macro = myMacros[item.name] || myMacros[targetMacroName]
+                macroError "Could not find macro #{item.originalName}" unless macro
+                macroError "Argument count mismatch for call to #{item.originalName} (expected #{macro.variables.size} but got #{item.operands.size} arguments for macro #{item.originalName} defined at #{macro.codeOrigin})" unless item.operands.size == macro.variables.size
                 item.operands.size.times {
                     | idx |
                     if item.operands[idx].is_a? Variable and myMacros[item.operands[idx].name]
-                        myMyMacros[myMacros[item.name].variables[idx].name] = myMacros[item.operands[idx].name]
-                        mapping[myMacros[item.name].variables[idx].name] = nil
+                        myMyMacros[macro.variables[idx].name] = myMacros[item.operands[idx].name]
+                        mapping[macro.variables[idx]] = nil
                     elsif item.operands[idx].is_a? Macro
-                        myMyMacros[myMacros[item.name].variables[idx].name] = item.operands[idx].capture
-                        mapping[myMacros[item.name].variables[idx].name] = nil
+                        myMyMacros[macro.variables[idx].name] = item.operands[idx].freshVariables
+                        mapping[macro.variables[idx]] = nil
                     else
-                        myMyMacros[myMacros[item.name].variables[idx]] = nil
-                        mapping[myMacros[item.name].variables[idx]] = item.operands[idx]
+                        myMyMacros[macro.variables[idx]] = nil
+                        mapping[macro.variables[idx]] = item.operands[idx]
                     end
                 }
                 if item.annotation
                     newList << Instruction.new(item.codeOrigin, "localAnnotation", [], item.annotation)
                 end
-                newList += myMacros[item.name].body.substitute(mapping).demacroify(myMyMacros).renameLabels(item.originalName).list
+                newList += macro.body.substitute(mapping, true).demacroify(myConstants, myMyMacros).renameLabels(item.originalName).list
+                @@demacroifyStack.pop
             else
-                newList << item.demacroify(myMacros)
+                newList << item.demacroify(myConstants, myMacros)
             end
         }
         Sequence.new(codeOrigin, newList).substitute({})
@@ -423,7 +606,7 @@ end
 
 class Node
     def resolve(constantsMap)
-        demacroify({}).resolveOffsets(constantsMap).fold
+        demacroify({}, {}).resolveOffsets(constantsMap).fold
     end
 end
 
@@ -521,6 +704,7 @@ end
 
 class Label
     def validate
+        raise "Unresolved substitution in Label #{name} at #{codeOrigin}" if name =~ /%/
     end
 end
 
@@ -543,4 +727,3 @@ class Skip
     def validate
     end
 end
-

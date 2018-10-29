@@ -440,7 +440,15 @@ static ALWAYS_INLINE unsigned tryGetBytecodeIndex(unsigned llintPC, CodeBlock* c
     return 0;
 #else
     Instruction* instruction = bitwise_cast<Instruction*>(llintPC);
-    if (instruction >= codeBlock->instructions().begin() && instruction < codeBlock->instructions().end()) {
+
+    if (codeBlock->instructions().size() == 0) {
+        isValid = false;
+        return 0;
+    }
+
+    const Instruction* begin = codeBlock->instructions().at(0).ptr();
+    const Instruction* end = reinterpret_cast<const Instruction*>(reinterpret_cast<const uint8_t*>(begin) + codeBlock->instructions().size());
+    if (instruction >= begin && instruction < end) {
         isValid = true;
         return codeBlock->bytecodeOffset(instruction);
     }

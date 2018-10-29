@@ -601,6 +601,36 @@ if X86_64 or ARM64 or ARM64E
             pop lr, cfr
         end
     end
+elsif ARMv7
+    macro probe(action)
+        push a0
+        push a1
+        push a2
+        push a3
+        push t0
+        push t1
+        push t2
+        push t3
+        push t4
+        push t5
+        push lr
+        push csr0
+
+        action()
+
+        pop csr0
+        pop lr
+        pop t5
+        pop t4
+        pop t3
+        pop t2
+        pop t1
+        pop t0
+        pop a3
+        pop a2
+        pop a1
+        pop a0
+    end
 else
     macro probe(action)
     end

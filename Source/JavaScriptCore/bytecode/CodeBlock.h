@@ -859,7 +859,7 @@ public:
     template<typename Metadata>
     Metadata& metadata(OpcodeID opcodeID, unsigned metadataID)
     {
-        return reinterpret_cast<Metadata*>(m_metadata->get(opcodeID))[metadataID];
+        return bitwise_cast<Metadata*>(m_metadata->get(opcodeID))[metadataID];
     }
 
     size_t metadataSizeInBytes()

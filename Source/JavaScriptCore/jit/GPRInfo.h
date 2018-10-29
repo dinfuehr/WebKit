@@ -561,6 +561,7 @@ public:
     static const GPRReg nonArgGPR1 = ARMRegisters::r8; // regT4
     static const GPRReg returnValueGPR = ARMRegisters::r0; // regT0
     static const GPRReg returnValueGPR2 = ARMRegisters::r1; // regT1
+    static const GPRReg regCS0 = ARMRegisters::r11;
     static const GPRReg nonPreservedNonReturnGPR = ARMRegisters::r5;
 
     static GPRReg toRegister(unsigned index)

@@ -760,11 +760,18 @@
 #endif
 
 /* Disable JIT and force C_LOOP on all 32bit-architectures but ARMv7-Thumb2/Linux. */
-#if USE(JSVALUE32_64) && !(CPU(ARM_THUMB2) && OS(LINUX))
+#if USE(JSVALUE32_64)
+#if CPU(ARM_THUMB2) && OS(LINUX)
+#undef ENABLE_JIT
+#define ENABLE_JIT 1
+#undef ENABLE_DFG_JIT
+#define ENABLE_DFG_JIT 0
+#else
 #undef ENABLE_JIT
 #define ENABLE_JIT 0
 #undef ENABLE_C_LOOP
 #define ENABLE_C_LOOP 1
+#endif
 #endif
 
 #if !defined(ENABLE_C_LOOP)

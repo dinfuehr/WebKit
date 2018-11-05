@@ -794,7 +794,7 @@ macro restoreCalleeSavesUsedByLLInt()
 end
 
 macro copyCalleeSavesToVMEntryFrameCalleeSavesBuffer(vm, temp)
-    if ARM64 or ARM64E or X86_64 or X86_64_WIN
+    if ARM64 or ARM64E or X86_64 or X86_64_WIN or ARMv7
         loadp VM::topEntryFrame[vm], temp
         vmEntryRecord(temp, temp)
         leap VMEntryRecord::calleeSaveRegistersBuffer[temp], temp
@@ -831,12 +831,14 @@ macro copyCalleeSavesToVMEntryFrameCalleeSavesBuffer(vm, temp)
             storeq csr4, 32[temp]
             storeq csr5, 40[temp]
             storeq csr6, 48[temp]
+        elsif ARMv7
+            storep csr0, [temp]
         end
     end
 end
 
 macro restoreCalleeSavesFromVMEntryFrameCalleeSavesBuffer(vm, temp)
-    if ARM64 or ARM64E or X86_64 or X86_64_WIN
+    if ARM64 or ARM64E or X86_64 or X86_64_WIN or ARMv7
         loadp VM::topEntryFrame[vm], temp
         vmEntryRecord(temp, temp)
         leap VMEntryRecord::calleeSaveRegistersBuffer[temp], temp
@@ -873,6 +875,8 @@ macro restoreCalleeSavesFromVMEntryFrameCalleeSavesBuffer(vm, temp)
             loadq 32[temp], csr4
             loadq 40[temp], csr5
             loadq 48[temp], csr6
+        elsif ARMv7
+            loadp [temp], csr0
         end
     end
 end

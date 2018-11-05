@@ -295,7 +295,7 @@ void JIT::compileOpCall(const Instruction* instruction, unsigned callLinkInfoInd
     store32(regT0, Address(stackPointerRegister, CallFrameSlot::callee * static_cast<int>(sizeof(Register)) + PayloadOffset - sizeof(CallerFrameAndPC)));
     store32(regT1, Address(stackPointerRegister, CallFrameSlot::callee * static_cast<int>(sizeof(Register)) + TagOffset - sizeof(CallerFrameAndPC)));
 
-    if (compileCallEval(instruction)) {
+    if (compileCallEval(bytecode)) {
         return;
     }
 

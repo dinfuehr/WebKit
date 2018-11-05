@@ -1,3 +1,21 @@
+2018-11-05  Dominik Infuehr  <dinfuehr@igalia.com>
+
+        Fix build with disabled DFG/FTL
+        https://bugs.webkit.org/show_bug.cgi?id=191256
+
+        Reviewed by NOBODY (OOPS!).
+
+        * bytecode/CodeBlock.cpp:
+        (JSC::CodeBlock::getICStatusMap):
+        * bytecode/InByIdStatus.cpp:
+        (JSC::InByIdStatus::computeFor):
+        * bytecode/PutByIdStatus.cpp:
+        (JSC::PutByIdStatus::computeFor):
+        (JSC::PutByIdStatus::hasExitSite): Deleted.
+        * bytecode/PutByIdStatus.h:
+        * jit/JITOpcodes.cpp:
+        (JSC::JIT::emit_op_catch):
+
 2018-11-02  Dominik Infuehr  <dinfuehr@igalia.com>
 
         Enable LLInt on ARMv7/Linux

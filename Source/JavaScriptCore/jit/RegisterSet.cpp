@@ -266,6 +266,7 @@ RegisterSet RegisterSet::dfgCalleeSaveRegisters()
     result.set(GPRInfo::regCS6);
 #endif
 #elif CPU(ARM_THUMB2)
+    // result.set(GPRInfo::regCS0);
 #elif CPU(ARM64)
     ASSERT(GPRInfo::regCS8 == GPRInfo::tagTypeNumberRegister);
     ASSERT(GPRInfo::regCS9 == GPRInfo::tagMaskRegister);

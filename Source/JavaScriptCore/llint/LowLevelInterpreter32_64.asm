@@ -2002,6 +2002,11 @@ end)
 
 
 op(llint_throw_from_slow_path_trampoline, macro()
+    loadp Callee[cfr], t1
+    andp MarkedBlockMask, t1
+    loadp MarkedBlockFooterOffset + MarkedBlock::Footer::m_vm[t1], t1
+    copyCalleeSavesToVMEntryFrameCalleeSavesBuffer(t1, t2)
+
     callSlowPath(_llint_slow_path_handle_exception)
 
     # When throwing from the interpreter (i.e. throwing from LLIntSlowPaths), so
@@ -2010,7 +2015,6 @@ op(llint_throw_from_slow_path_trampoline, macro()
     loadp Callee[cfr], t1
     andp MarkedBlockMask, t1
     loadp MarkedBlockFooterOffset + MarkedBlock::Footer::m_vm[t1], t1
-    copyCalleeSavesToVMEntryFrameCalleeSavesBuffer(t1, t2)
     jmp VM::targetMachinePCForThrow[t1]
 end)
 

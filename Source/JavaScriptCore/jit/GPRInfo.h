@@ -541,15 +541,11 @@ public:
     static const GPRReg regT1 = ARMRegisters::r1;
     static const GPRReg regT2 = ARMRegisters::r2;
     static const GPRReg regT3 = ARMRegisters::r3;
-    static const GPRReg regT4 = ARMRegisters::r8;
-    static const GPRReg regT5 = ARMRegisters::r9;
-    static const GPRReg regT6 = ARMRegisters::r10;
-#if CPU(ARM_THUMB2)
-    static const GPRReg regT7 = ARMRegisters::r11;
-#else 
-    static const GPRReg regT7 = ARMRegisters::r7;
-#endif
-    static const GPRReg regT8 = ARMRegisters::r4;
+    static const GPRReg regT4 = ARMRegisters::r4;
+    static const GPRReg regT5 = ARMRegisters::r5;
+    static const GPRReg regT6 = ARMRegisters::r8;
+    static const GPRReg regT7 = ARMRegisters::r9;
+    static const GPRReg regT8 = ARMRegisters::r10;
     static const GPRReg regCS0 = ARMRegisters::r11;
     // These registers match the baseline JIT.
     static const GPRReg callFrameRegister = ARMRegisters::fp;
@@ -562,7 +558,7 @@ public:
     static const GPRReg nonArgGPR1 = ARMRegisters::r8; // regT4
     static const GPRReg returnValueGPR = ARMRegisters::r0; // regT0
     static const GPRReg returnValueGPR2 = ARMRegisters::r1; // regT1
-    static const GPRReg nonPreservedNonReturnGPR = ARMRegisters::r5;
+    static const GPRReg nonPreservedNonReturnGPR = ARMRegisters::r2; // regT2
 
     static GPRReg toRegister(unsigned index)
     {

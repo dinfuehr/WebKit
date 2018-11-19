@@ -459,6 +459,10 @@ def isFTLEnabled
     $jitTests && $isFTLPlatform
 end
 
+def isWebAssemblyEnabled
+    isFTLEnabled
+end
+
 if !$testRunnerType
     if $remote and $hostOS == "darwin"
         $testRunnerType = :shell

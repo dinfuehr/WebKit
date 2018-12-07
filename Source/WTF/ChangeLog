@@ -1,3 +1,15 @@
+2018-12-07  Dominik Infuehr  <dinfuehr@igalia.com>
+
+        Enable DFG on ARM/Linux again
+        https://bugs.webkit.org/show_bug.cgi?id=192496
+
+        Reviewed by NOBODY (OOPS!).
+
+        After changing the bytecode format DFG was disabled on all 32-bit
+        architectures. Enable DFG now again on ARM/Linux.
+
+        * wtf/Platform.h:
+
 2018-12-06  Alexey Proskuryakov  <ap@apple.com>
 
         Move USE_NEW_THEME out of WebCore's config.h

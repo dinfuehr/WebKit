@@ -1322,7 +1322,7 @@ void BytecodeGenerator::recordOpcode(OpcodeID opcodeID)
 
 void BytecodeGenerator::alignWideOpcode()
 {
-#if CPU(NEEDS_ALIGNED_ACCESS)
+#if CPU(NEEDS_ALIGNED_BYTECODE)
     while ((m_writer.position() + 1) % OpcodeSize::Wide)
         OpNop::emit<OpcodeSize::Narrow>(this);
 #endif
@@ -4425,7 +4425,7 @@ void BytecodeGenerator::emitYieldPoint(RegisterID* argument, JSAsyncGeneratorFun
     m_tryContextStack.swap(savedTryContextStack);
 
 
-#if CPU(NEEDS_ALIGNED_ACCESS)
+#if CPU(NEEDS_ALIGNED_BYTECODE)
     // conservatively align for the bytecode rewriter: it will delete this yield and
     // append a fragment, so we make sure that the start of the fragments is aligned
     while (m_writer.position() % OpcodeSize::Wide)

@@ -326,6 +326,14 @@
 #define WTF_CPU_NEEDS_ALIGNED_ACCESS 1
 #endif
 
+#if !defined(WTF_CPU_NEEDS_ALIGNED_BYTECODE)
+#if CPU(NEEDS_ALIGNED_ACCESS)
+#define WTF_CPU_NEEDS_ALIGNED_BYTECODE 1
+#else
+#define WTF_CPU_NEEDS_ALIGNED_BYTECODE 0
+#endif
+#endif
+
 #if COMPILER(GCC_COMPATIBLE)
 /* __LP64__ is not defined on 64bit Windows since it uses LLP64. Using __SIZEOF_POINTER__ is simpler. */
 #if __SIZEOF_POINTER__ == 8

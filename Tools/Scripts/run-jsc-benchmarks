@@ -1382,9 +1382,9 @@ class VM
     elsif @path =~ /\/Debug\/([a-zA-Z]+)$/
       @libPath, @relativeBinPath = [$~.pre_match+"/Debug"], "./#{$1}"
     elsif @path =~ /\/Release\/bin(64|32|)\/([\.a-zA-Z]+)$/
-      @libPath, @relativeBinPath = [$~.pre_match+"/Release/lib#{$1}"], "./#{$2}"
+      @libPath, @relativeBinPath = [$~.pre_match+"/Release/lib#{$1}", @path], "./#{$2}"
     elsif @path =~ /\/Debug\/bin(64|32|)\/([\.a-zA-Z]+)$/
-      @libPath, @relativeBinPath = [$~.pre_match+"/Debug/lib#{$1}"], "./#{$2}"
+      @libPath, @relativeBinPath = [$~.pre_match+"/Debug/lib#{$1}", @path], "./#{$2}"
     elsif @path =~ /\/Contents\/Resources\/([a-zA-Z]+)$/
       @libPath = [$~.pre_match + "/Contents/Resources", $~.pre_match + "/Contents/Frameworks"]
     elsif @path =~ /\/JavaScriptCore.framework\/Resources\/([a-zA-Z]+)$/
@@ -1414,7 +1414,11 @@ class VM
     raise unless Dir.mkdir(filename)
     @libPath.each {
       | libPathPart |
-      cmd = "cp -a #{Shellwords.shellescape(libPathPart)}/* #{Shellwords.shellescape(filename.to_s)}"
+      if File.file?(libPathPart)
+        cmd = "cp -a #{Shellwords.shellescape(libPathPart)} #{Shellwords.shellescape(filename.to_s)}"
+      else
+        cmd = "cp -a #{Shellwords.shellescape(libPathPart)}/* #{Shellwords.shellescape(filename.to_s)}"
+      end
       $stderr.puts ">> #{cmd}" if $verbosity>=2
       raise unless system(cmd)
     }

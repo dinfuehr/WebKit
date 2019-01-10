@@ -26,7 +26,8 @@ mark_as_advanced(ICU_INCLUDE_DIR)
 find_library(
     ICU_LIBRARY
     NAMES libicuuc cygicuuc cygicuuc32 icuuc
-    HINTS ${PC_ICU_LIBRARY_DIRS}
+    HINTS "/usr/lib/"
+          ${PC_ICU_LIBRARY_DIRS}
           ${PC_ICU_LIBDIR}
           ${WEBKIT_LIBRARIES_LINK_DIR}
     DOC "Libraries to link against for the common parts of ICU")
@@ -52,7 +53,8 @@ if (ICU_INCLUDE_DIR AND ICU_LIBRARY)
     find_library(
         ICU_I18N_LIBRARY
         NAMES icui18n libicui18n libicuin cygicuin cygicuin32 icuin
-        HINTS ${PC_ICU_I18N_LIBRARY_DIRS}
+        HINTS "/usr/lib/"
+              ${PC_ICU_I18N_LIBRARY_DIRS}
               ${PC_ICU_I18N_LIBDIR}
               ${WEBKIT_LIBRARIES_LINK_DIR}
         DOC "Libraries to link against for ICU internationalization")
@@ -69,7 +71,8 @@ if (ICU_INCLUDE_DIR AND ICU_LIBRARY)
     find_library(
         ICU_DATA_LIBRARY
         NAMES icudata libicudata cygicudata cygicudata32
-        HINTS ${PC_ICU_I18N_LIBRARY_DIRS}
+        HINTS "/usr/lib/"
+              ${PC_ICU_I18N_LIBRARY_DIRS}
               ${PC_ICU_I18N_LIBDIR}
               ${WEBKIT_LIBRARIES_LINK_DIR}
         DOC "Libraries to link against for ICU data")

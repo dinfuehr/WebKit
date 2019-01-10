@@ -297,6 +297,8 @@ else
         const metadataTable = csr3
     elsif ARMv7
         const metadataTable = csr0
+    elsif X86
+        # no free register, keep metadataTable on the stack
     else
         error
     end
@@ -344,11 +346,20 @@ macro wide(narrowFn, wideFn, k)
 end
 
 macro metadata(size, opcode, dst, scratch)
-    loadp constexpr %opcode%::opcodeID * 4[metadataTable], dst # offset = metadataTable<unsigned*>[opcodeID]
-    getu(size, opcode, metadataID, scratch) # scratch = bytecode.metadataID
-    muli sizeof %opcode%::Metadata, scratch # scratch *= sizeof(Op::Metadata)
-    addi scratch, dst # offset += scratch
-    addp metadataTable, dst # return &metadataTable[offset]
+    if X86
+        loadp constexpr %opcode%::opcodeID * 4[metadataTable], dst # offset = metadataTable<unsigned*>[opcodeID]
+        getu(size, opcode, metadataID, scratch) # scratch = bytecode.metadataID
+        muli sizeof %opcode%::Metadata, scratch # scratch *= sizeof(Op::Metadata)
+        addi scratch, dst # offset += scratch
+        addp -4[cfr], dst # return &metadataTable[offset]
+    else
+        loadp -4[cfr], dst
+        loadp constexpr %opcode%::opcodeID * 4[dst], dst # offset = metadataTable<unsigned*>[opcodeID]
+        getu(size, opcode, metadataID, scratch) # scratch = bytecode.metadataID
+        muli sizeof %opcode%::Metadata, scratch # scratch *= sizeof(Op::Metadata)
+        addi scratch, dst # offset += scratch
+        addp metadataTable, dst # return &metadataTable[offset]
+    end
 end
 
 macro jumpImpl(target)
@@ -1184,7 +1195,12 @@ macro prologue(codeBlockGetter, codeBlockSetter, osrSlowPath, traceSlowPath)
         move t0, sp
     end
 
-    loadp CodeBlock::m_metadata[t1], metadataTable
+    if X86
+        loadp CodeBlock::m_metadata[t1], t1
+        storep t1, -4[cfr]
+    else
+        loadp CodeBlock::m_metadata[t1], metadataTable
+    end
 
     if JSVALUE64
         move TagTypeNumber, tagTypeNumber

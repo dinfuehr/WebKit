@@ -1967,9 +1967,12 @@ commonOp(llint_op_catch, macro() end, macro (size)
     storep 0, VM::callFrameForCatch[t3]
     restoreStackPointerAfterCall()
 
-    # restore metadataTable since we don't restore callee saves for CLoop during unwinding
-    loadp CodeBlock[cfr], t1
-    loadp CodeBlock::m_metadata[t1], metadataTable
+    if X86
+    else
+        # restore metadataTable since we don't restore callee saves for CLoop during unwinding
+        loadp CodeBlock[cfr], t1
+        loadp CodeBlock::m_metadata[t1], metadataTable
+    end
 
     loadi VM::targetInterpreterPCForThrow[t3], PC
 

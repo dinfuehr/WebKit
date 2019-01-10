@@ -643,7 +643,13 @@ public:
 
     RegisterAtOffsetList* calleeSaveRegisters() const { return m_calleeSaveRegisters.get(); }
 
-    static unsigned numberOfLLIntBaselineCalleeSaveRegisters() { return RegisterSet::llintBaselineCalleeSaveRegisters().numberOfSetRegisters(); }
+    static unsigned numberOfLLIntBaselineCalleeSaveRegisters() {
+#if CPU(X86)
+        return 1;
+#else
+        return RegisterSet::llintBaselineCalleeSaveRegisters().numberOfSetRegisters();
+#endif
+    }
     static size_t llintBaselineCalleeSaveSpaceAsVirtualRegisters();
     size_t calleeSaveSpaceAsVirtualRegisters();
 #else

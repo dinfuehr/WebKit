@@ -755,7 +755,7 @@
 #endif
 
 #if USE(JSVALUE32_64)
-#if CPU(ARM_THUMB2) && OS(LINUX)
+#if (CPU(ARM_THUMB2) || CPU(X86)) && OS(LINUX)
 /* On ARMv7/Linux the JIT is enabled unless explicitly disabled. */
 #if !defined(ENABLE_JIT)
 #define ENABLE_JIT 1

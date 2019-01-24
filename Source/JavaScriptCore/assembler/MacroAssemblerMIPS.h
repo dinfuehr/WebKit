@@ -3259,13 +3259,17 @@ public:
         m_assembler.cvtwd(fpTempRegister, src);
         m_assembler.mfc1(dest, fpTempRegister);
 
-        // If the result is zero, it might have been -0.0, and the double comparison won't catch this!
-        if (negZeroCheck)
-            failureCases.append(branch32(Equal, dest, MIPSRegisters::zero));
-
         // Convert the integer result back to float & compare to the original value - if not equal or unordered (NaN) then jump.
         convertInt32ToDouble(dest, fpTemp);
         failureCases.append(branchDouble(DoubleNotEqualOrUnordered, fpTemp, src));
+
+	// Test for negative zero.
+	if (negZeroCheck) {
+	    Jump valueIsNonZero = branch32(NotEqual, dest, MIPSRegisters::zero);
+	    m_assembler.mfhc1(dataTempRegister, src);
+	    failureCases.append(branch32(LessThan, dataTempRegister, TrustedImm32(0)));
+	    valueIsNonZero.link(this);
+	}
     }
 
     Jump branchDoubleNonZero(FPRegisterID reg, FPRegisterID scratch)

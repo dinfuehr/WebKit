@@ -581,6 +581,11 @@ public:
     {
         add32(imm, address);
     }
+
+    void addPtr(RegisterID src, Address address)
+    {
+        add32(src, address);
+    }
     
     void andPtr(RegisterID src, RegisterID dest)
     {
@@ -670,6 +675,11 @@ public:
     void subPtr(TrustedImmPtr imm, RegisterID dest)
     {
         sub32(TrustedImm32(imm), dest);
+    }
+
+    void subPtr(TrustedImm32 imm, Address dest)
+    {
+        sub32(imm, dest);
     }
 
     void xorPtr(RegisterID src, RegisterID dest)

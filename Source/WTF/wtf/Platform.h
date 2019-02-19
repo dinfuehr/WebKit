@@ -1015,6 +1015,9 @@
 #define ENABLE_YARR_JIT_ALL_PARENS_EXPRESSIONS 1
 #define ENABLE_YARR_JIT_BACKREFERENCES 1
 #endif
+#if OS(LINUX) && (CPU(ARM_THUMB2) || CPU(MIPS))
+#define ENABLE_YARR_JIT_ALL_PARENS_EXPRESSIONS 1
+#endif
 #endif
 
 /* If either the JIT or the RegExp JIT is enabled, then the Assembler must be

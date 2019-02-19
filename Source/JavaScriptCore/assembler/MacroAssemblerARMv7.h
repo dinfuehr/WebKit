@@ -211,6 +211,13 @@ public:
         store32(dataTempRegister, address);
     }
 
+    void add32(RegisterID src, Address address)
+    {
+        load32(address, dataTempRegister);
+        add32(src, dataTempRegister);
+        store32(dataTempRegister, address);
+    }
+
     void add32(Address src, RegisterID dest)
     {
         load32(src, dataTempRegister);
@@ -708,6 +715,11 @@ public:
     void load16Unaligned(BaseIndex address, RegisterID dest)
     {
         load16(setupArmAddress(address), dest);
+    }
+
+    void load16Unaligned(ImplicitAddress address, RegisterID dest)
+    {
+        load16(address, dest);
     }
 
     void load32(const void* address, RegisterID dest)

@@ -1,3 +1,25 @@
+2019-03-07  Dominik Infuehr  <dinfuehr@igalia.com>
+
+        Run unit tests on remote machine
+        https://bugs.webkit.org/show_bug.cgi?id=195404
+
+        Reviewed by NOBODY (OOPS!).
+
+        Unit tests were always run locally, which does not work
+        with cross-compiled builds. Make the unit tests and JS files
+        needed for execution part of the bundle. `deployBundle` copies and extracts
+        the bundle on a remote machine. Unit tests are executed sequentially on the first
+        remote machine.
+
+        Avoid using `ldd` for retrieving JSC's dependencies, this does
+        not work with cross-compilation as well. As an alternative hardcode
+        dependencies since changes should be quite rare anyway.
+
+        * Scripts/run-javascriptcore-tests:
+        (runTest):
+        (runJSCStressTests):
+        * Scripts/run-jsc-stress-tests:
+
 2019-03-06  Rob Buis  <rbuis@igalia.com>
 
         Consider supporting the `referrerpolicy` attribute.

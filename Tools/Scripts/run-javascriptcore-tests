@@ -360,6 +360,8 @@ sub testPath {
 sub runTest {
     my ($testName, $jsonTestStatusName) = @_;
 
+    return if ($remoteHost || $remoteConfigFile);
+
     chdirWebKit();
     chdir($productDir) or die "Failed to switch directory to '$productDir'\n";
     my @command = (testPath($productDir, $testName));
@@ -517,6 +519,13 @@ sub runJSCStressTests
     if ($filter) {
         push(@jscStressDriverCmd, "--filter");
         push(@jscStressDriverCmd, $filter);
+    }
+
+    if ($remoteHost || $remoteConfigFile) {
+        push(@jscStressDriverCmd, "--testmasm") if ($runTestMasm);
+        push(@jscStressDriverCmd, "--testair") if ($runTestAir);
+        push(@jscStressDriverCmd, "--testb3") if ($runTestB3);
+        push(@jscStressDriverCmd, "--testapi") if ($runTestAPI);
     }
 
     push(@jscStressDriverCmd, ("--verbose") x $verbose) if ($verbose > 0);

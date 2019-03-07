@@ -119,6 +119,10 @@ $envVars = []
 $mode = "full"
 $buildType = "release"
 $forceCollectContinuously = false
+$runTestMasm = false
+$runTestAir = false
+$runTestB3 = false
+$runTestAPI = false
 
 def usage
     puts "run-jsc-stress-tests -j <shell path> <collections path> [<collections path> ...]"
@@ -160,6 +164,10 @@ def usage
     puts "                            no-cjit-validate-phases, no-cjit-collect-continuously, dfg-eager"
     puts "                            and for FTL platforms: no-ftl, ftl-eager-no-cjit and"
     puts "                            ftl-no-cjit-small-pool."
+    puts "--testmasm                  Run testmasm unit tests."
+    puts "--testair                   Run testair unit tests."
+    puts "--testb3                    Run testb3 unit tests."
+    puts "--testapi                   Run testapi unit tests."
     exit 1
 end
 
@@ -190,7 +198,11 @@ GetoptLong.new(['--help', '-h', GetoptLong::NO_ARGUMENT],
                ['--debug', GetoptLong::NO_ARGUMENT],
                ['--release', GetoptLong::NO_ARGUMENT],
                ['--quick', '-q', GetoptLong::NO_ARGUMENT],
-               ['--basic', GetoptLong::NO_ARGUMENT]).each {
+               ['--basic', GetoptLong::NO_ARGUMENT],
+               ['--testmasm', GetoptLong::NO_ARGUMENT],
+               ['--testair', GetoptLong::NO_ARGUMENT],
+               ['--testb3', GetoptLong::NO_ARGUMENT],
+               ['--testapi', GetoptLong::NO_ARGUMENT]).each {
     | opt, arg |
     case opt
     when '--help'
@@ -251,6 +263,14 @@ GetoptLong.new(['--help', '-h', GetoptLong::NO_ARGUMENT],
         $buildType = "debug"
     when '--release'
         $buildType = "release"
+    when '--testmasm'
+        $runTestMasm = true
+    when '--testair'
+        $runTestAir = true
+    when '--testb3'
+        $runTestB3 = true
+    when '--testapi'
+        $runTestAPI = true
     end
 }
 
@@ -1640,7 +1660,8 @@ def prepareBundle
         
         frameworkPath = frameworkFromJSCPath($jscPath)
         destinationFrameworkPath = Pathname.new(".vm") + "JavaScriptCore.framework"
-        $jscPath = destinationFrameworkPath + "Resources" + "jsc"
+        resourcesPath = destinationFrameworkPath + "Resources"
+        $jscPath = resourcesPath + "jsc"
         $testingFrameworkPath = Pathname.new("..") + destinationFrameworkPath
 
         if frameworkPath
@@ -1687,20 +1708,44 @@ def prepareBundle
                 end
             end
 
+            originalJSCDir = Pathname.new(originalJSCPath).dirname.dirname
+
             if $remote and $hostOS == "linux"
-                begin
-                    dependencies = `ldd #{source}`
-                    dependencies.split(/\n/).each {
-                        | dependency |
-                        FileUtils.cp_r $&, $jscPath.dirname if dependency =~ /#{WEBKIT_PATH}[^ ]*/
-                    }
-                rescue
-                    $stderr.puts "Warning: unable to determine or copy library dependnecies of JSC."
+                dependencies = ["lib/libJavaScriptCore.so.1"]
+                for dependency in dependencies
+                    source = originalJSCDir.join(dependency)
+                    destination = resourcesPath.join(source.basename)
+                    FileUtils.cp source, destination if File.file?(source)
+                end
+            end
+
+            if $remote
+                files = []
+                files << "testmasm" if $runTestMasm
+                files << "testair" if $runTestAir
+                files << "testb3" if $runTestB3
+                files << "testapi" if $runTestAPI
+
+                for file in files
+                    source = originalJSCDir.join("bin").join(file)
+                    destination = resourcesPath.join(file)
+                    FileUtils.cp source, destination
+                end
+
+                if $runTestAPI
+                    files = ["testapi.js", "testapi-function-overrides.js"]
+                    testapiDir = resourcesPath.join("testapiScripts")
+                    FileUtils.mkdir testapiDir
+                    for file in files
+                        source = originalJSCDir.join("bin").join(file)
+                        destination = testapiDir.join(file)
+                        FileUtils.cp source, destination
+                    end
                 end
             end
         }
     end
-    
+
     Dir.chdir($outputDir) {
         FileUtils.cp_r HELPERS_PATH, ".helpers"
     }
@@ -1796,17 +1841,20 @@ def cleanRunnerDirectory
     }
 end
 
-def sshRead(cmd, remoteIndex=0)
+def sshRead(cmd, remoteIndex: 0, dump: false)
     raise unless $remote
-
     remoteHost = $remoteHosts[remoteIndex]
 
-    result = ""
+    result = "" unless dump
     IO.popen("ssh -o NoHostAuthenticationForLocalhost=yes -p #{remoteHost.port} #{remoteHost.user}@#{remoteHost.host} '#{cmd}'", "r") {
       | inp |
       inp.each_line {
         | line |
-        result += line
+        if dump
+            $stderr.puts line
+        else
+            result += line
+        end
       }
     }
     raise "#{$?}" unless $?.success?
@@ -1913,19 +1961,41 @@ def runAndMonitorTestRunnerCommand(*cmd)
     end
 end
 
+def deployBundle(remoteHost, remoteIndex)
+    raise unless $remote
+    if !remoteHost.remoteDirectory
+        remoteHost.remoteDirectory = JSON::parse(sshRead("cat ~/.bencher", remoteIndex: remoteIndex))["tempPath"]
+    end
+    mysys("ssh", "-o", "NoHostAuthenticationForLocalhost=yes", "-p", remoteHost.port.to_s, "#{remoteHost.user}@#{remoteHost.host}", "mkdir -p #{remoteHost.remoteDirectory}")
+    mysys("scp", "-o", "NoHostAuthenticationForLocalhost=yes", "-P", remoteHost.port.to_s, ($outputDir.dirname + $tarFileName).to_s, "#{remoteHost.user}@#{remoteHost.host}:#{remoteHost.remoteDirectory}")
+    remoteScript = "cd #{remoteHost.remoteDirectory} && "
+    remoteScript += "rm -rf #{$outputDir.basename} && "
+    remoteScript += "tar xzf #{$tarFileName}"
+    mysys("ssh", "-o", "NoHostAuthenticationForLocalhost=yes", "-p", remoteHost.port.to_s, "#{remoteHost.user}@#{remoteHost.host}", remoteScript)
+end
+
+def runUnitTests(remoteIndex=0)
+    raise unless $remote
+    tests = []
+    tests << "testmasm" if $runTestMasm
+    tests << "testair" if $runTestAir
+    tests << "testb3" if $runTestB3
+    tests << "testapi" if $runTestAPI
+    return if tests.empty?
+    remoteHost = $remoteHosts[remoteIndex]
+    deployBundle(remoteHost, remoteIndex)
+    for test in tests
+        $stderr.puts "Running #{test}"
+        sshRead("cd #{remoteHost.remoteDirectory}/#{$outputDir.basename}/#{$jscPath.dirname} && export LD_LIBRARY_PATH=#{remoteHost.remoteDirectory}/#{$outputDir.basename}/#{$jscPath.dirname} && ./#{test}", dump: true)
+        $stderr.puts
+    end
+end
+
 def runTestRunner(remoteIndex=0)
     if $remote
         remoteHost = $remoteHosts[remoteIndex]
-        if !remoteHost.remoteDirectory
-            remoteHost.remoteDirectory = JSON::parse(sshRead("cat ~/.bencher", remoteIndex))["tempPath"]
-        end
-        mysys("ssh", "-o", "NoHostAuthenticationForLocalhost=yes", "-p", remoteHost.port.to_s, "#{remoteHost.user}@#{remoteHost.host}", "mkdir -p #{remoteHost.remoteDirectory}")
-        mysys("scp", "-o", "NoHostAuthenticationForLocalhost=yes", "-P", remoteHost.port.to_s, ($outputDir.dirname + $tarFileName).to_s, "#{remoteHost.user}@#{remoteHost.host}:#{remoteHost.remoteDirectory}")
-        remoteScript = "\""
-        remoteScript += "cd #{remoteHost.remoteDirectory} && "
-        remoteScript += "rm -rf #{$outputDir.basename} && "
-        remoteScript += "tar xzf #{$tarFileName} && "
-        remoteScript += "cd #{$outputDir.basename}/.runner && "
+        deployBundle(remoteHost, remoteIndex)
+        remoteScript = "\"cd #{remoteHost.remoteDirectory}/#{$outputDir.basename}/.runner && "
         remoteScript += "export DYLD_FRAMEWORK_PATH=\\\"\\$(cd #{$testingFrameworkPath.dirname}; pwd)\\\" && "
         remoteScript += "export LD_LIBRARY_PATH=#{remoteHost.remoteDirectory}/#{$outputDir.basename}/#{$jscPath.dirname} && "
         remoteScript += "export JSCTEST_timeout=#{Shellwords.shellescape(ENV['JSCTEST_timeout'])} && "
@@ -1947,7 +2017,7 @@ def detectFailures
     if $remote
         $remoteHosts.each_with_index {
             | host, remoteIndex |
-            output = sshRead("cd #{host.remoteDirectory}/#{$outputDir.basename}/.runner && find . -maxdepth 1 -name \"test_fail_*\"", remoteIndex)
+            output = sshRead("cd #{host.remoteDirectory}/#{$outputDir.basename}/.runner && find . -maxdepth 1 -name \"test_fail_*\"", remoteIndex: remoteIndex)
             output.split(/\n/).each {
                 | line |
                 next unless line =~ /test_fail_/
@@ -2098,6 +2168,7 @@ def runRemote
         prepareTestRunner(index)
     }
     compressBundle
+    runUnitTests
     threads = []
     $remoteHosts.each_index {
         | index |

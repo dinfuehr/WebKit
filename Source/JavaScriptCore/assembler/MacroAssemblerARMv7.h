@@ -814,6 +814,12 @@ public:
             m_assembler.ldrh(dest, address.base, dataTempRegister);
         }
     }
+
+    void load16(ExtendedAddress address, RegisterID dest)
+    {
+        move(TrustedImmPtr(address.offset), addressTempRegister);
+        m_assembler.ldrh(dest, addressTempRegister, address.base, 1);
+    }
     
     void load16SignedExtendTo32(ImplicitAddress, RegisterID)
     {

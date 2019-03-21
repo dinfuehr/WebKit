@@ -1253,6 +1253,15 @@ public:
         }
     }
 
+    /* Need to use zero-extened load half-word for load16.  */
+    void load16(ExtendedAddress address, RegisterID dest)
+    {
+        move(TrustedImmPtr(address.offset), addrTempRegister);
+        lshift32(address.base, TrustedImm32(1), dest);
+        add32(dest, addrTempRegister, dest);
+        m_assembler.lhu(dest, dest, 0);
+    }
+
     void load16SignedExtendTo32(BaseIndex address, RegisterID dest)
     {
         if (!m_fixedWidth) {

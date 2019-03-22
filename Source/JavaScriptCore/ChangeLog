@@ -5,8 +5,8 @@
 
         Reviewed by NOBODY (OOPS!).
 
-        Support jitting for more paren regular expressions on
-        ARM/MIPS. ARM doesn't have enough registers, so we need to use
+        Support jitting for more paren regular expressions and backreferences
+        on ARM/MIPS. ARM doesn't have enough registers, so we need to use
         immediates for the masks.
 
         Both ARM/MIPS only pass 4 arguments in registers, so freeList

@@ -5,7 +5,8 @@
 
         Reviewed by NOBODY (OOPS!).
 
-        Enable jitting of more paren expression on ARM/MIPS.
+        Enable jitting of more paren expression and backreferences
+        on ARM/MIPS.
 
         * wtf/Platform.h:
 

@@ -211,6 +211,13 @@ public:
         store32(dataTempRegister, address);
     }
 
+    void add32(RegisterID src, Address dest)
+    {
+        load32(dest, dataTempRegister);
+        add32(src, dataTempRegister);
+        store32(dataTempRegister, dest);
+    }
+
     void add32(Address src, RegisterID dest)
     {
         load32(src, dataTempRegister);
@@ -710,6 +717,11 @@ public:
         load16(setupArmAddress(address), dest);
     }
 
+    void load16Unaligned(ImplicitAddress address, RegisterID dest)
+    {
+        load16(address, dest);
+    }
+
     void load32(const void* address, RegisterID dest)
     {
         move(TrustedImmPtr(address), addressTempRegister);
@@ -801,6 +813,12 @@ public:
             move(TrustedImm32(address.offset), dataTempRegister);
             m_assembler.ldrh(dest, address.base, dataTempRegister);
         }
+    }
+
+    void load16(ExtendedAddress address, RegisterID dest)
+    {
+        move(TrustedImmPtr(address.offset), addressTempRegister);
+        m_assembler.ldrh(dest, addressTempRegister, address.base, 1);
     }
     
     void load16SignedExtendTo32(ImplicitAddress, RegisterID)

@@ -1030,6 +1030,47 @@ public:
         }
     }
 
+    void load16Unaligned(ImplicitAddress address, RegisterID dest)
+    {
+        if (address.offset >= -32768 && address.offset <= 32767 && !m_fixedWidth) {
+            /*
+                lbu     immTemp, address.base+x(offset) (x=0 for LE, x=1 for BE)
+                lbu     dest, address.base+x(offset)    (x=1 for LE, x=0 for BE)
+                sll     dest, dest, 8
+                or      dest, dest, immTemp
+            */
+#if CPU(BIG_ENDIAN)
+            m_assembler.lbu(immTempRegister, address.base, address.offset + 1);
+            m_assembler.lbu(dest, address.base, address.offset);
+#else
+            m_assembler.lbu(immTempRegister, address.base, address.offset);
+            m_assembler.lbu(dest, address.base, address.offset + 1);
+#endif
+            m_assembler.sll(dest, dest, 8);
+            m_assembler.orInsn(dest, dest, immTempRegister);
+        } else {
+            /*
+                li      immTemp, imm
+                addu    dest, src, immTemp
+                lbu     immTemp, x(addrtemp) (x=0 for LE, x=1 for BE)
+                lbu     dest, x(addrtemp)    (x=1 for LE, x=0 for BE)
+                sll     dest, dest, 8
+                or      dest, dest, immTemp
+            */
+            add32(TrustedImm32(address.offset), address.base, addrTempRegister);
+
+#if CPU(BIG_ENDIAN)
+            m_assembler.lbu(immTempRegister, addrTempRegister, 1);
+            m_assembler.lbu(dest, addrTempRegister, 0);
+#else
+            m_assembler.lbu(immTempRegister, addrTempRegister, 0);
+            m_assembler.lbu(dest, addrTempRegister, 1);
+#endif
+            m_assembler.sll(dest, dest, 8);
+            m_assembler.orInsn(dest, dest, immTempRegister);
+        }
+    }
+
     void load16Unaligned(BaseIndex address, RegisterID dest)
     {
         if (address.offset >= -32768 && address.offset <= 32767 && !m_fixedWidth) {
@@ -1210,6 +1251,15 @@ public:
             m_assembler.addu(addrTempRegister, addrTempRegister, immTempRegister);
             m_assembler.lhu(dest, addrTempRegister, address.offset);
         }
+    }
+
+    /* Need to use zero-extened load half-word for load16.  */
+    void load16(ExtendedAddress address, RegisterID dest)
+    {
+        move(TrustedImmPtr(address.offset), addrTempRegister);
+        lshift32(address.base, TrustedImm32(1), dest);
+        add32(dest, addrTempRegister, dest);
+        m_assembler.lhu(dest, dest, 0);
     }
 
     void load16SignedExtendTo32(BaseIndex address, RegisterID dest)

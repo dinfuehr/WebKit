@@ -46,15 +46,26 @@ class YarrGenerator : public YarrJITInfo, private MacroAssembler {
     static const RegisterID index = ARMRegisters::r1;
     static const RegisterID length = ARMRegisters::r2;
     static const RegisterID output = ARMRegisters::r3;
+    static const RegisterID freelistRegister = ARMRegisters::r4;
 
-    static const RegisterID regT0 = ARMRegisters::r4;
-    static const RegisterID regT1 = ARMRegisters::r5;
-    static const RegisterID initialStart = ARMRegisters::r8;
+    static const RegisterID regT0 = ARMRegisters::r5;
+    static const RegisterID regT1 = ARMRegisters::r8;
+    static const RegisterID regT2 = ARMRegisters::r9;
+    static const RegisterID remainingMatchCount = ARMRegisters::r10;
+    static const RegisterID regUnicodeInputAndTrail = ARMRegisters::r11;
+    static const RegisterID initialStart = ARMRegisters::r14;
+    static const RegisterID endOfStringAddress = ARMRegisters::fp;
+
+    const TrustedImm32 supplementaryPlanesBase = TrustedImm32(0x10000);
+    const TrustedImm32 surrogateTagMask = TrustedImm32(0xfffffc00);
+    const TrustedImm32 leadingSurrogateTag = TrustedImm32(0xd800);
+    const TrustedImm32 trailingSurrogateTag = TrustedImm32(0xdc00);
 
     static const RegisterID returnRegister = ARMRegisters::r0;
     static const RegisterID returnRegister2 = ARMRegisters::r1;
 
 #define HAVE_INITIAL_START_REG
+#define JIT_UNICODE_EXPRESSIONS
 #elif CPU(ARM64)
     // Argument registers
     static const RegisterID input = ARM64Registers::x0;
@@ -87,15 +98,28 @@ class YarrGenerator : public YarrJITInfo, private MacroAssembler {
     static const RegisterID index = MIPSRegisters::a1;
     static const RegisterID length = MIPSRegisters::a2;
     static const RegisterID output = MIPSRegisters::a3;
+    static const RegisterID freelistRegister = MIPSRegisters::s4;
+    static const RegisterID freelistSizeRegister = MIPSRegisters::s5; // Only used during initialization.
 
-    static const RegisterID regT0 = MIPSRegisters::t4;
-    static const RegisterID regT1 = MIPSRegisters::t5;
-    static const RegisterID initialStart = MIPSRegisters::t6;
+    static const RegisterID regT0 = MIPSRegisters::t2;
+    static const RegisterID regT1 = MIPSRegisters::t3;
+    static const RegisterID regT2 = MIPSRegisters::t4;
+    static const RegisterID remainingMatchCount = MIPSRegisters::t5;
+    static const RegisterID regUnicodeInputAndTrail = MIPSRegisters::t6;
+    static const RegisterID initialStart = MIPSRegisters::t9;
+
+    static const RegisterID supplementaryPlanesBase = MIPSRegisters::s0;
+    static const RegisterID leadingSurrogateTag = MIPSRegisters::s1;
+    static const RegisterID trailingSurrogateTag = MIPSRegisters::s2;
+    static const RegisterID endOfStringAddress = MIPSRegisters::s3;
 
     static const RegisterID returnRegister = MIPSRegisters::v0;
     static const RegisterID returnRegister2 = MIPSRegisters::v1;
 
+    const TrustedImm32 surrogateTagMask = TrustedImm32(0xfffffc00);
+
 #define HAVE_INITIAL_START_REG
+#define JIT_UNICODE_EXPRESSIONS
 #elif CPU(X86)
     static const RegisterID input = X86Registers::eax;
     static const RegisterID index = X86Registers::edx;
@@ -232,14 +256,20 @@ class YarrGenerator : public YarrJITInfo, private MacroAssembler {
         if (parenContextSize > INT16_MAX)
             m_abortExecution.append(jump());
 
+#if CPU(ARM_THUMB2)
+        Address freelistSize = Address(ARMRegisters::sp, 44 + m_callFrameSizeInBytes);
+#else
+        RegisterID freelistSize = freelistSizeRegister;
+#endif
+
         Jump emptyFreeList = branchTestPtr(Zero, freelistRegister);
         move(freelistRegister, parenContextPointer);
         addPtr(TrustedImm32(parenContextSize), freelistRegister, nextParenContextPointer);
-        addPtr(freelistRegister, freelistSizeRegister);
-        subPtr(TrustedImm32(parenContextSize), freelistSizeRegister);
+        addPtr(freelistRegister, freelistSize);
+        subPtr(TrustedImm32(parenContextSize), freelistSize);
 
         Label loopTop(this);
-        Jump initDone = branchPtr(Above, nextParenContextPointer, freelistSizeRegister);
+        Jump initDone = branchPtr(Above, nextParenContextPointer, freelistSize);
         storePtr(nextParenContextPointer, Address(parenContextPointer, ParenContext::nextOffset()));
         move(nextParenContextPointer, parenContextPointer);
         addPtr(TrustedImm32(parenContextSize), parenContextPointer, nextParenContextPointer);
@@ -275,8 +305,15 @@ class YarrGenerator : public YarrJITInfo, private MacroAssembler {
         storePtr(tempReg, Address(parenContextReg, ParenContext::returnAddressOffset()));
         if (compileMode == IncludeSubpatterns) {
             for (unsigned subpattern = firstSubpattern; subpattern <= lastSubpattern; subpattern++) {
+#if CPU(X86_64) || CPU(ARM64)
                 loadPtr(Address(output, (subpattern << 1) * sizeof(unsigned)), tempReg);
                 storePtr(tempReg, Address(parenContextReg, ParenContext::subpatternOffset(subpattern)));
+#else
+                for (unsigned offset = 0; offset < 2 * sizeof(unsigned); offset += sizeof(unsigned)) {
+                    load32(Address(output, (subpattern << 1) * sizeof(unsigned) + offset), tempReg);
+                    store32(tempReg, Address(parenContextReg, ParenContext::subpatternOffset(subpattern) + offset));
+                }
+#endif
                 clearSubpatternStart(subpattern);
             }
         }
@@ -297,8 +334,15 @@ class YarrGenerator : public YarrJITInfo, private MacroAssembler {
         storeToFrame(tempReg, subpatternBaseFrameLocation + BackTrackInfoParentheses::returnAddressIndex());
         if (compileMode == IncludeSubpatterns) {
             for (unsigned subpattern = firstSubpattern; subpattern <= lastSubpattern; subpattern++) {
+#if CPU(X86_64) || CPU(ARM64)
                 loadPtr(Address(parenContextReg, ParenContext::subpatternOffset(subpattern)), tempReg);
                 storePtr(tempReg, Address(output, (subpattern << 1) * sizeof(unsigned)));
+#else
+                for (unsigned offset = 0; offset < 2 * sizeof(unsigned); offset += sizeof(unsigned)) {
+                    load32(Address(parenContextReg, ParenContext::subpatternOffset(subpattern) + offset), tempReg);
+                    store32(tempReg, Address(output, (subpattern << 1) * sizeof(unsigned) + offset));
+                }
+#endif
             }
         }
         subpatternBaseFrameLocation += YarrStackSpaceForBackTrackInfoParentheses;
@@ -619,7 +663,7 @@ class YarrGenerator : public YarrJITInfo, private MacroAssembler {
         poke(imm, frameLocation);
     }
 
-#if CPU(ARM64) || CPU(X86_64)
+#if CPU(ARM64) || CPU(X86_64) || CPU(ARM_THUMB2) || CPU(MIPS)
     void storeToFrame(TrustedImmPtr imm, unsigned frameLocation)
     {
         poke(imm, frameLocation);
@@ -654,15 +698,15 @@ class YarrGenerator : public YarrJITInfo, private MacroAssembler {
     }
     void initCallFrame()
     {
-        unsigned callFrameSizeInBytes = alignCallFrameSizeInBytes(m_pattern.m_body->m_callFrameSize);
-        if (callFrameSizeInBytes) {
+        m_callFrameSizeInBytes = alignCallFrameSizeInBytes(m_pattern.m_body->m_callFrameSize);
+        if (m_callFrameSizeInBytes) {
 #if CPU(X86_64) || CPU(ARM64)
             if (Options::zeroStackFrame()) {
                 // We need to start from the stack pointer, because we could have spilled callee saves
                 move(stackPointerRegister, regT0);
-                subPtr(Imm32(callFrameSizeInBytes), stackPointerRegister);
-                if (callFrameSizeInBytes <= 128) {
-                    for (unsigned offset = 0; offset < callFrameSizeInBytes; offset += sizeof(intptr_t))
+                subPtr(Imm32(m_callFrameSizeInBytes), stackPointerRegister);
+                if (m_callFrameSizeInBytes <= 128) {
+                    for (unsigned offset = 0; offset < m_callFrameSizeInBytes; offset += sizeof(intptr_t))
                         storePtr(TrustedImm32(0), Address(regT0, -8 - offset));
                 } else {
                     Label zeroLoop = label();
@@ -677,10 +721,11 @@ class YarrGenerator : public YarrJITInfo, private MacroAssembler {
                 }
             } else
 #endif
-                subPtr(Imm32(callFrameSizeInBytes), stackPointerRegister);
+                subPtr(Imm32(m_callFrameSizeInBytes), stackPointerRegister);
 
         }
     }
+
     void removeCallFrame()
     {
         unsigned callFrameSizeInBytes = alignCallFrameSizeInBytes(m_pattern.m_body->m_callFrameSize);
@@ -2817,7 +2862,7 @@ class YarrGenerator : public YarrJITInfo, private MacroAssembler {
                 if (onceThrough)
                     m_backtrackingState.linkTo(endOp.m_reentry, this);
                 else {
-                    // If we don't need to move the input poistion, and the pattern has a fixed size
+                    // If we don't need to move the input position, and the pattern has a fixed size
                     // (in which case we omit the store of the start index until the pattern has matched)
                     // then we can just link the backtrack out of the last alternative straight to the
                     // head of the first alternative.
@@ -3774,12 +3819,27 @@ class YarrGenerator : public YarrJITInfo, private MacroAssembler {
         zeroExtend32ToPtr(index, index);
         zeroExtend32ToPtr(length, length);
 #elif CPU(ARM_THUMB2)
-        push(ARMRegisters::r4);
-        push(ARMRegisters::r5);
-        push(ARMRegisters::r6);
-        push(ARMRegisters::r8);
+        pushPair(framePointerRegister, linkRegister);
+        pushPair(ARMRegisters::r4, ARMRegisters::r5);
+        pushPair(ARMRegisters::r6, ARMRegisters::r8);
+        pushPair(ARMRegisters::r9, ARMRegisters::r10);
+        pushPair(ARMRegisters::r11, ARMRegisters::r4); // push r4 twice for stack alignment
+        load32(Address(stackPointerRegister, 40), freelistRegister);
 #elif CPU(MIPS)
-        // Do nothing.
+        pushPair(framePointerRegister, returnAddressRegister);
+        move(stackPointerRegister, framePointerRegister);
+        pushPair(MIPSRegisters::s4, MIPSRegisters::s5);
+
+        if (m_decodeSurrogatePairs) {
+            pushPair(MIPSRegisters::s0, MIPSRegisters::s1);
+            pushPair(MIPSRegisters::s2, MIPSRegisters::s3);
+            move(TrustedImm32(0x10000), supplementaryPlanesBase);
+            move(TrustedImm32(0xd800), leadingSurrogateTag);
+            move(TrustedImm32(0xdc00), trailingSurrogateTag);
+        }
+
+        load32(Address(framePointerRegister, 24), freelistRegister);
+        load32(Address(framePointerRegister, 28), freelistSizeRegister);
 #endif
 
         store8(TrustedImm32(1), &m_vm->isExecutingInRegExpJIT);
@@ -3827,12 +3887,19 @@ class YarrGenerator : public YarrJITInfo, private MacroAssembler {
         if (m_decodeSurrogatePairs)
             popPair(framePointerRegister, linkRegister);
 #elif CPU(ARM_THUMB2)
-        pop(ARMRegisters::r8);
-        pop(ARMRegisters::r6);
-        pop(ARMRegisters::r5);
-        pop(ARMRegisters::r4);
+        popPair(ARMRegisters::r11, ARMRegisters::r4); // pop r4 twice for stack alignment
+        popPair(ARMRegisters::r9, ARMRegisters::r10);
+        popPair(ARMRegisters::r6, ARMRegisters::r8);
+        popPair(ARMRegisters::r4, ARMRegisters::r5);
+        popPair(framePointerRegister, linkRegister);
 #elif CPU(MIPS)
-        // Do nothing
+        if (m_decodeSurrogatePairs) {
+            popPair(MIPSRegisters::s2, MIPSRegisters::s3);
+            popPair(MIPSRegisters::s0, MIPSRegisters::s1);
+        }
+
+        popPair(MIPSRegisters::s4, MIPSRegisters::s5);
+        popPair(framePointerRegister, returnAddressRegister);
 #endif
         ret();
     }
@@ -3852,6 +3919,7 @@ public:
         , m_containsNestedSubpatterns(false)
         , m_parenContextSizes(compileMode == IncludeSubpatterns ? m_pattern.m_numSubpatterns : 0, m_pattern.m_body->m_callFrameSize)
 #endif
+        , m_callFrameSizeInBytes(0)
     {
     }
 
@@ -4210,6 +4278,7 @@ private:
     JumpList m_hitMatchLimit;
     Vector<Call> m_tryReadUnicodeCharacterCalls;
     Label m_tryReadUnicodeCharacterEntry;
+    unsigned m_callFrameSizeInBytes;
 
     // The regular expression expressed as a linear sequence of operations.
     Vector<YarrOp, 128> m_ops;

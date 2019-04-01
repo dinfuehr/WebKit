@@ -1,3 +1,36 @@
+2019-04-01  Dominik Infuehr  <dinfuehr@igalia.com>
+
+        [YARR] Improved JIT support on ARM/MIPS
+        https://bugs.webkit.org/show_bug.cgi?id=196080
+
+        Reviewed by NOBODY (OOPS!).
+
+        Support jitting for more paren regular expressions and backreferences
+        on ARM/MIPS. ARM doesn't have enough registers, so we need to use
+        immediates for the masks.
+
+        Both ARM/MIPS only pass 4 arguments in registers, so freeList
+        and freeListSize are passed on the stack and in the prolog loaded
+        into the respective registers.
+
+        ARM keeps freeListSize on the stack due to lack of registers.
+
+        * assembler/MacroAssembler.h:
+        (JSC::MacroAssembler::addPtr):
+        (JSC::MacroAssembler::subPtr):
+        * assembler/MacroAssemblerARMv7.h:
+        (JSC::MacroAssemblerARMv7::add32):
+        (JSC::MacroAssemblerARMv7::load16Unaligned):
+        * assembler/MacroAssemblerMIPS.h:
+        (JSC::MacroAssemblerMIPS::load16Unaligned):
+        * yarr/YarrJIT.cpp:
+        (JSC::Yarr::YarrGenerator::saveParenContext):
+        (JSC::Yarr::YarrGenerator::restoreParenContext):
+        (JSC::Yarr::YarrGenerator::backtrack):
+        (JSC::Yarr::YarrGenerator::generateEnter):
+        (JSC::Yarr::YarrGenerator::generateReturn):
+        * yarr/YarrJIT.h:
+
 2019-03-31  Yusuke Suzuki  <ysuzuki@apple.com>
 
         [JSC] Butterfly allocation from LargeAllocation should try "realloc" behavior if collector thread is not active

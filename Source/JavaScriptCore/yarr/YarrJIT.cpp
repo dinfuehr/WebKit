@@ -53,7 +53,6 @@ class YarrGenerator : public YarrJITInfo, private MacroAssembler {
     static const RegisterID regT2 = ARMRegisters::r9;
     static const RegisterID remainingMatchCount = ARMRegisters::r10;
     static const RegisterID regUnicodeInputAndTrail = ARMRegisters::r11;
-    static const RegisterID initialStart = ARMRegisters::r14;
     static const RegisterID endOfStringAddress = ARMRegisters::fp;
 
     const TrustedImm32 supplementaryPlanesBase = TrustedImm32(0x10000);
@@ -64,7 +63,6 @@ class YarrGenerator : public YarrJITInfo, private MacroAssembler {
     static const RegisterID returnRegister = ARMRegisters::r0;
     static const RegisterID returnRegister2 = ARMRegisters::r1;
 
-#define HAVE_INITIAL_START_REG
 #define JIT_UNICODE_EXPRESSIONS
 #elif CPU(ARM64)
     // Argument registers
@@ -698,7 +696,6 @@ class YarrGenerator : public YarrJITInfo, private MacroAssembler {
     }
     void initCallFrame()
     {
-        m_callFrameSizeInBytes = alignCallFrameSizeInBytes(m_pattern.m_body->m_callFrameSize);
         if (m_callFrameSizeInBytes) {
 #if CPU(X86_64) || CPU(ARM64)
             if (Options::zeroStackFrame()) {
@@ -3919,7 +3916,7 @@ public:
         , m_containsNestedSubpatterns(false)
         , m_parenContextSizes(compileMode == IncludeSubpatterns ? m_pattern.m_numSubpatterns : 0, m_pattern.m_body->m_callFrameSize)
 #endif
-        , m_callFrameSizeInBytes(0)
+        , m_callFrameSizeInBytes(alignCallFrameSizeInBytes(m_pattern.m_body->m_callFrameSize))
     {
     }
 
